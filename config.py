@@ -7,8 +7,10 @@ from pathlib import Path
 BASE_DIR = Path(__file__).parent
 INPUT_DIR = BASE_DIR / "input"
 OUTPUT_DIR = BASE_DIR / "output"
+TTS_CACHE_DIR = OUTPUT_DIR / ".tts_cache"
 INPUT_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
+TTS_CACHE_DIR.mkdir(exist_ok=True)
 
 # === MiMo API ===
 MIMO_API_KEY: str = os.environ.get("XIAOMI_MIMO_API_KEY", "")
@@ -34,10 +36,10 @@ CHAPTER_SILENCE_MS: int = 1500
 
 # === 并发控制 ===
 LLM_CONCURRENCY: int = 5
-TTS_CONCURRENCY: int = 5
+TTS_CONCURRENCY: int = 10
 
 # === 文本分块 ===
-CHUNK_MAX_CHARS: int = 1500
+CHUNK_MAX_CHARS: int = 3000
 
 # === 重试 ===
 MAX_RETRIES: int = 3
