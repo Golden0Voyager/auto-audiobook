@@ -46,8 +46,13 @@ def parse_epub(file_path: Path) -> BookData:
         if not text.strip():
             continue
 
-        # 过滤元数据/目录内容
-        if _is_metadata(text):
+        # 跳过纯目录页面
+        if _is_toc_page(text):
+            continue
+
+        # 清理元数据行
+        text = _clean_metadata_lines(text)
+        if not text.strip():
             continue
 
         chapter_title = toc_titles[idx] if idx < len(toc_titles) else f"Chapter {idx + 1}"
@@ -198,33 +203,43 @@ def _strip_html(html: str) -> str:
     return soup.get_text(separator="\n", strip=True)
 
 
-# 元数据/目录关键词
-_METADATA_KEYWORDS = [
+# 元数据行关键词（需要从正文中移除的行）
+_METADATA_LINE_KEYWORDS = [
+    "来源于",
+    "Published by",
+    "Copyright",
+    "听报道",
     "回到目录",
     "Back to TOC",
     "返回目录",
     "返回上级",
-    "来源于",
-    "Published by",
-    "Copyright",
+    "相关文章：",
+    "更多报道详见：",
 ]
 
 # 最小有效文本长度
 _MIN_TEXT_LENGTH = 100
 
 
-def _is_metadata(text: str) -> bool:
-    """检测文本是否为元数据/目录内容。"""
-    # 太短的文本可能是元数据
+def _is_toc_page(text: str) -> bool:
+    """检测是否为纯目录页面（封面、空白页等）。"""
+    # 太短的文本可能是封面/空白页
     if len(text.strip()) < _MIN_TEXT_LENGTH:
         return True
 
-    # 检查是否包含元数据关键词
-    for keyword in _METADATA_KEYWORDS:
-        if keyword in text:
-            return True
-
     return False
+
+
+def _clean_metadata_lines(text: str) -> str:
+    """移除文本中的元数据行。"""
+    lines = text.split("\n")
+    cleaned_lines = []
+    for line in lines:
+        # 跳过包含元数据关键词的行
+        if any(keyword in line for keyword in _METADATA_LINE_KEYWORDS):
+            continue
+        cleaned_lines.append(line)
+    return "\n".join(cleaned_lines)
 
 
 def _get_metadata(book: epub.EpubBook, key: str, default: str) -> str:
