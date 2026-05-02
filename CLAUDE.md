@@ -54,13 +54,22 @@ python main.py
 
 - `XIAOMI_MIMO_API_KEY` — MiMo 平台 API Key
 
+## 性能优化
+
+| 优化项 | 说明 |
+|--------|------|
+| TTS 并发 | 默认 10 并发（可通过 `TTS_CONCURRENCY` 调整） |
+| 文本块大小 | 默认 3000 字符（可通过 `CHUNK_MAX_CHARS` 调整） |
+| TTS 缓存 | 自动缓存合成结果到 `output/.tts_cache/` |
+| 增量处理 | 自动跳过已处理的章节，支持断点续传 |
+
 ## 开发规范
 
 - **包管理**：始终使用 `uv pip install`，不用 pip
 - **语言**：始终用中文回复
 - **代理**：终端需配置 `export https_proxy=http://127.0.0.1:7897`
 - **音频规格**：256kbps 单声道 MP3（高音质纯人声）
-- **并发控制**：Semaphore ≤ 5（平衡速度与 API 限流）
+- **并发控制**：TTS 默认 10 并发
 
 ## 目录说明
 
@@ -68,4 +77,5 @@ python main.py
 auto_audiobook/
 ├── input/          # 监听文件夹（放入 EPUB/MOBI/PDF）
 └── output/         # 输出目录（按书名建子目录）
+    └── .tts_cache/ # TTS 缓存目录
 ```
