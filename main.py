@@ -10,11 +10,17 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import questionary
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from config import CLEAN_MODE, INPUT_DIR, OUTPUT_DIR, TTS_STYLE_PRESETS
+from config import CLEAN_MODE, INPUT_DIR, TTS_STYLE_PRESETS
 from pipeline import process_book
+
+console = Console()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -114,19 +120,24 @@ async def batch_process(files: list[Path], preview_chunks: int = 0) -> list[Book
 
 def print_batch_summary(results: list[BookResult]) -> None:
     """输出批量处理汇总。"""
-    print(f"\n{'='*50}")
-    print("批量处理完成")
-    print(f"{'='*50}")
+    table = Table(title="批量处理完成", border_style="cyan", show_header=True, header_style="bold magenta")
+    table.add_column("#", style="dim", width=3)
+    table.add_column("文件名")
+    table.add_column("状态", justify="right")
+    table.add_column("耗时", justify="right")
 
     for i, r in enumerate(results, 1):
-        status = f"成功 ({r.elapsed:.1f}s)" if r.success else f"失败: {r.error}"
-        print(f"  [{i}/{len(results)}] {r.file_path.stem} - {status}")
+        if r.success:
+            table.add_row(str(i), r.file_path.stem, "[green]成功[/green]", f"{r.elapsed:.1f}s")
+        else:
+            table.add_row(str(i), r.file_path.stem, f"[red]失败: {r.error}[/red]", f"{r.elapsed:.1f}s")
+
+    console.print(table)
 
     success = sum(1 for r in results if r.success)
     failed = len(results) - success
     total_time = sum(r.elapsed for r in results)
-    print(f"\n总计: {success} 成功, {failed} 失败, 耗时 {total_time:.0f}s")
-    print(f"{'='*50}")
+    console.print(f"\n总计: [green]{success} 成功[/green], [red]{failed} 失败[/red], 耗时 {total_time:.0f}s")
 
 
 # ── 交互式界面 ────────────────────────────────────────────────────────
@@ -141,88 +152,71 @@ def _scan_input_dir(input_dir: Path) -> list[Path]:
     return files
 
 
-def _parse_selection(text: str, max_index: int) -> list[int]:
-    """解析用户选择，支持 1,3,5-8 格式。返回 0-based 索引列表。"""
-    indices: list[int] = []
-    for part in text.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        if "-" in part:
-            try:
-                start, end = part.split("-", 1)
-                start_idx = int(start) - 1
-                end_idx = int(end) - 1
-                if 0 <= start_idx <= end_idx < max_index:
-                    indices.extend(range(start_idx, end_idx + 1))
-            except ValueError:
-                continue
-        else:
-            try:
-                idx = int(part) - 1
-                if 0 <= idx < max_index:
-                    indices.append(idx)
-            except ValueError:
-                continue
-    return sorted(set(indices))
-
-
 def interactive_mode() -> None:
     """交互式终端界面。"""
+    console.print(Panel("[bold cyan]Auto Audiobook[/bold cyan]\n自动化有声书生成引擎", border_style="cyan"))
+
     while True:
-        print(f"\n{'='*40}")
-        print("  Auto Audiobook - 自动化有声书生成")
-        print(f"{'='*40}")
-        print("  1. 交互式选择文件")
-        print("  2. 监听目录 (watchdog)")
-        print("  3. 退出")
-        print()
+        choice = questionary.select(
+            "请选择操作模式:",
+            choices=[
+                questionary.Choice(title="交互式选择文件", value="select"),
+                questionary.Choice(title="监听目录 (watchdog)", value="watch"),
+                questionary.Choice(title="退出", value="exit"),
+            ],
+            style=questionary.Style([
+                ('pointer', 'fg:#00ffff'),
+                ('selected', 'fg:#00ff00'),
+            ]),
+        ).ask()
 
-        choice = input("> 请选择 [1/2/3]: ").strip()
-
-        if choice == "1":
-            files = _scan_input_dir(INPUT_DIR)
-            if not files:
-                print(f"\ninput/ 目录为空，请先放入 EPUB/MOBI/PDF 文件")
-                continue
-
-            print(f"\n扫描到 {len(files)} 个文件:")
-            for i, f in enumerate(files, 1):
-                print(f"  [{i:2d}] {f.name}")
-            print(f"  [ A] 全部处理")
-            print(f"  [ Q] 返回")
-
-            selection = input("\n请选择 (可多选，如 1,3,5-8): ").strip().upper()
-
-            if selection == "Q":
-                continue
-            elif selection == "A":
-                selected = files
-            else:
-                indices = _parse_selection(selection, len(files))
-                if not indices:
-                    print("无效选择，请重试")
-                    continue
-                selected = [files[i] for i in indices]
-
-            print(f"\n已选择 {len(selected)} 个文件:")
-            for i, f in enumerate(selected, 1):
-                print(f"  [{i}] {f.name}")
-
-            confirm = input("\n确认开始处理? [Y/n]: ").strip().upper()
-            if confirm == "N":
-                continue
-
-            results = asyncio.run(batch_process(selected))
-            print_batch_summary(results)
-
-        elif choice == "2":
-            watch_mode()
-        elif choice == "3":
-            print("再见!")
+        if choice is None or choice == "exit":
+            console.print("[dim]再见![/dim]")
             sys.exit(0)
-        else:
-            print("无效选择，请重试")
+
+        if choice == "watch":
+            watch_mode()
+            continue
+
+        # 交互式选择文件
+        files = _scan_input_dir(INPUT_DIR)
+        if not files:
+            console.print("[yellow]input/ 目录为空，请先放入 EPUB/MOBI/PDF 文件[/yellow]")
+            continue
+
+        choices = [
+            questionary.Choice(title=f.name, value=f)
+            for f in files
+        ]
+
+        selected = questionary.checkbox(
+            f"扫描到 {len(files)} 个文件，用空格勾选，回车确认:",
+            choices=choices,
+            style=questionary.Style([
+                ('checkbox', 'fg:#00ffff'),
+                ('selected', 'fg:#00ff00'),
+                ('pointer', 'fg:#00ffff'),
+            ]),
+        ).ask()
+
+        if not selected:
+            console.print("[yellow]未选择任何文件[/yellow]")
+            continue
+
+        # 确认清单
+        table = Table(title="待处理文件", border_style="cyan", show_header=True, header_style="bold magenta")
+        table.add_column("#", style="dim", width=3)
+        table.add_column("文件名")
+        for i, f in enumerate(selected, 1):
+            table.add_row(str(i), f.name)
+        console.print(table)
+
+        confirm = questionary.confirm("确认开始处理?", default=True).ask()
+        if not confirm:
+            continue
+
+        results = asyncio.run(batch_process(selected))
+        print_batch_summary(results)
 
 
 # ── 入口 ──────────────────────────────────────────────────────────────
