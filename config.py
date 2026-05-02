@@ -36,7 +36,7 @@ CHAPTER_SILENCE_MS: int = 1500
 
 # === 并发控制 ===
 LLM_CONCURRENCY: int = 5
-TTS_CONCURRENCY: int = 10
+TTS_CONCURRENCY: int = 25
 
 # === 文本分块 ===
 CHUNK_MAX_CHARS: int = 3000
