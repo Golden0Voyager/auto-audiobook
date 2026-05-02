@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shutil
 import time
 from pathlib import Path
 
@@ -91,7 +92,7 @@ async def process_book(file_path: Path, preview_chunks: int = 0) -> Path:
         logger.info(f"  试听模式: 截取前 {preview_chunks} 个文本块")
 
     # Phase 3: TTS 合成（支持增量处理）
-    output_dir = OUTPUT_DIR / _sanitize_dirname(title)
+    output_dir = OUTPUT_DIR / _build_output_dirname(file_path, title)
     existing_chapters = _get_existing_chapters(output_dir)
 
     if existing_chapters:
@@ -130,6 +131,15 @@ async def process_book(file_path: Path, preview_chunks: int = 0) -> Path:
     elapsed = time.time() - start
     logger.info(f"处理完成! 耗时: {elapsed:.1f}s, 输出: {output_dir}")
 
+    # 将源文件移入输出目录
+    try:
+        dest = output_dir / file_path.name
+        if not dest.exists():
+            shutil.move(str(file_path), str(dest))
+            logger.info(f"  源文件已移至: {dest}")
+    except Exception as e:
+        logger.warning(f"  源文件移动失败: {e}")
+
     return output_dir
 
 
@@ -144,6 +154,15 @@ def _truncate_to_chunks(chapters: list[CleanedChapter], max_chunks: int) -> list
         result.append(CleanedChapter(title=ch.title, chunks=truncated_chunks))
         remaining -= len(truncated_chunks)
     return result
+
+
+def _build_output_dirname(file_path: Path, title: str) -> str:
+    """构建输出目录名。优先从文件名提取日期和期号，如 2026年04月27日-第16期。"""
+    # 尝试匹配文件名中的日期和期号：2026年04月27日 (第16期)
+    match = re.search(r"(\d{4}年\d{2}月\d{2}日)\s*\(第(\d+)期\)", file_path.stem)
+    if match:
+        return _sanitize_dirname(f"{match.group(1)}-第{match.group(2)}期")
+    return _sanitize_dirname(title)
 
 
 def _sanitize_dirname(name: str) -> str:
