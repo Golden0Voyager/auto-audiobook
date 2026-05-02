@@ -46,6 +46,10 @@ def parse_epub(file_path: Path) -> BookData:
         if not text.strip():
             continue
 
+        # 过滤元数据/目录内容
+        if _is_metadata(text):
+            continue
+
         chapter_title = toc_titles[idx] if idx < len(toc_titles) else f"Chapter {idx + 1}"
         chunks = chunk_text(text, CHUNK_MAX_CHARS)
         if chunks:
@@ -192,6 +196,35 @@ def _strip_html(html: str) -> str:
     for tag in soup(["script", "style"]):
         tag.decompose()
     return soup.get_text(separator="\n", strip=True)
+
+
+# 元数据/目录关键词
+_METADATA_KEYWORDS = [
+    "回到目录",
+    "Back to TOC",
+    "返回目录",
+    "返回上级",
+    "来源于",
+    "Published by",
+    "Copyright",
+]
+
+# 最小有效文本长度
+_MIN_TEXT_LENGTH = 100
+
+
+def _is_metadata(text: str) -> bool:
+    """检测文本是否为元数据/目录内容。"""
+    # 太短的文本可能是元数据
+    if len(text.strip()) < _MIN_TEXT_LENGTH:
+        return True
+
+    # 检查是否包含元数据关键词
+    for keyword in _METADATA_KEYWORDS:
+        if keyword in text:
+            return True
+
+    return False
 
 
 def _get_metadata(book: epub.EpubBook, key: str, default: str) -> str:
