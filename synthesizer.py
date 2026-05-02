@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from openai import AsyncOpenAI
+from tqdm import tqdm
 
 from config import (
     MAX_RETRIES,
@@ -44,18 +45,39 @@ async def synthesize_chapters(
     """并发合成所有章节的音频。"""
     voice = TTS_VOICES.get(language, TTS_VOICES["zh"])
     style = TTS_STYLES.get(language, TTS_STYLES["zh"])
+    total_chunks = sum(len(ch.chunks) for ch in chapters)
     logger.info(f"  TTS 音色: {voice}, 语言: {language}")
 
     client = AsyncOpenAI(api_key=MIMO_API_KEY, base_url=MIMO_BASE_URL)
     semaphore = asyncio.Semaphore(concurrency)
 
+    progress = tqdm(total=total_chunks, desc="  TTS 合成", unit="块", ncols=80)
+    cache_hits = 0
+    api_calls = 0
+
     async def _synthesize_chapter(
         idx: int, chapter: CleanedChapter
     ) -> ChapterAudio:
-        tasks = [
-            _synthesize_single(client, chunk, voice, style, semaphore)
-            for chunk in chapter.chunks
-        ]
+        nonlocal cache_hits, api_calls
+
+        async def _track_progress(chunk: str) -> bytes:
+            nonlocal cache_hits, api_calls
+            # 检查是否缓存命中（与 _synthesize_single 相同的 hash 逻辑）
+            processed = optimize_for_speech(chunk)
+            chunk_hash = hashlib.md5(f"{voice}:{processed}".encode()).hexdigest()
+            cache_path = TTS_CACHE_DIR / f"{chunk_hash}.wav"
+            is_cached = cache_path.exists()
+
+            result = await _synthesize_single(client, chunk, voice, style, semaphore)
+
+            if is_cached:
+                cache_hits += 1
+            else:
+                api_calls += 1
+            progress.update(1)
+            return result
+
+        tasks = [_track_progress(chunk) for chunk in chapter.chunks]
         audio_chunks = await asyncio.gather(*tasks)
         return ChapterAudio(
             title=chapter.title,
@@ -64,7 +86,12 @@ async def synthesize_chapters(
         )
 
     tasks = [_synthesize_chapter(idx, ch) for idx, ch in enumerate(chapters)]
-    return await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks)
+
+    progress.close()
+    logger.info(f"  TTS 统计: 缓存命中 {cache_hits}, API 调用 {api_calls}")
+
+    return results
 
 
 async def _synthesize_single(
