@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from cleaner import CleanedChapter, clean_chapters
 from config import CLEAN_MODE, OUTPUT_DIR
 from parser import parse_file
 from rule_cleaner import clean_chapters as rule_clean_chapters
-from synthesizer import synthesize_chapters
+from synthesizer import ChapterAudio, synthesize_chapters
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ def _load_cleaned_cache(cache_path: Path) -> tuple[str, str, str, list[CleanedCh
 
 
 async def process_book(file_path: Path) -> Path:
-    """处理单本书，返回输出目录。"""
+    """处理单本书，返回输出目录。支持增量处理。"""
     start = time.time()
     logger.info(f"开始处理: {file_path.name}")
 
@@ -84,15 +85,40 @@ async def process_book(file_path: Path) -> Path:
         logger.info(f"  清洗完成: {len(cleaned)} 章节")
         title, author, language = book.title, book.author, book.language
 
-    # Phase 3: TTS 合成
-    logger.info(f"[3/4] TTS 语音合成 (语言: {language})...")
-    chapter_audios = await synthesize_chapters(cleaned, language=language)
+    # Phase 3: TTS 合成（支持增量处理）
+    output_dir = OUTPUT_DIR / _sanitize_dirname(title)
+    existing_chapters = _get_existing_chapters(output_dir)
+
+    if existing_chapters:
+        logger.info(f"[3/4] TTS 语音合成 (语言: {language})... [增量模式]")
+        logger.info(f"  已存在 {len(existing_chapters)} 个章节，跳过已处理的章节")
+    else:
+        logger.info(f"[3/4] TTS 语音合成 (语言: {language})...")
+
+    # 只处理缺失的章节
+    chapters_to_process = [
+        (idx, ch) for idx, ch in enumerate(cleaned)
+        if idx + 1 not in existing_chapters
+    ]
+
+    if not chapters_to_process:
+        logger.info("  所有章节已处理完成，跳过 TTS 合成")
+        chapter_audios = []
+    else:
+        logger.info(f"  需要处理 {len(chapters_to_process)} 个章节")
+        chapter_audios = await synthesize_chapters(
+            [ch for _, ch in chapters_to_process],
+            language=language
+        )
+        # 恢复章节编号
+        for i, (original_idx, _) in enumerate(chapters_to_process):
+            chapter_audios[i].track_num = original_idx + 1
+
     audio_count = sum(len(ch.audio_chunks) for ch in chapter_audios)
     logger.info(f"  合成完成: {audio_count} 音频块")
 
     # Phase 4: 音频拼接
     logger.info("[4/4] 音频拼接与导出...")
-    output_dir = OUTPUT_DIR / _sanitize_dirname(title)
     mp3_paths = assemble_book(chapter_audios, title, author, output_dir)
     logger.info(f"  导出完成: {len(mp3_paths)} 个 MP3 文件")
 
@@ -104,5 +130,18 @@ async def process_book(file_path: Path) -> Path:
 
 def _sanitize_dirname(name: str) -> str:
     """清理目录名中的非法字符。"""
-    import re
     return re.sub(r'[<>:"/\\|?*]', "_", name).strip()
+
+
+def _get_existing_chapters(output_dir: Path) -> set[int]:
+    """获取已存在的 MP3 文件对应的章节编号。"""
+    if not output_dir.exists():
+        return set()
+
+    existing = set()
+    for mp3_file in output_dir.glob("*.mp3"):
+        # 从文件名提取章节编号，格式如 "01_章节标题.mp3"
+        match = re.match(r"^(\d+)_", mp3_file.name)
+        if match:
+            existing.add(int(match.group(1)))
+    return existing
