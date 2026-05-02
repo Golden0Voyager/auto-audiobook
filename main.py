@@ -12,7 +12,7 @@ from pathlib import Path
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from config import CLEAN_MODE, INPUT_DIR
+from config import CLEAN_MODE, INPUT_DIR, TTS_STYLE_PRESETS
 from pipeline import process_book
 
 logging.basicConfig(
@@ -90,11 +90,19 @@ def main() -> None:
         default=CLEAN_MODE,
         help="文本清洗模式: rule (规则引擎, 默认) 或 llm (大模型)",
     )
+    parser.add_argument(
+        "--style",
+        choices=list(TTS_STYLE_PRESETS.keys()),
+        default="default",
+        help="TTS 朗读风格: default(默认), news(新闻), story(故事), casual(轻松), classic(经典)",
+    )
     args = parser.parse_args()
 
-    # 动态设置清洗模式
+    # 动态设置配置
     import config
     config.CLEAN_MODE = args.clean_mode
+    config.TTS_STYLE = args.style
+    config.TTS_STYLES = TTS_STYLE_PRESETS[args.style]
 
     if args.file:
         asyncio.run(cli_mode(args.file))
