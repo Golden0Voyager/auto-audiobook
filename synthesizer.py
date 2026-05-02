@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 
 from openai import AsyncOpenAI
 
@@ -16,6 +18,7 @@ from config import (
     MIMO_TTS_MODEL,
     RETRY_BASE_DELAY,
     TTS_AUDIO_FORMAT,
+    TTS_CACHE_DIR,
     TTS_CONCURRENCY,
     TTS_STYLES,
     TTS_VOICES,
@@ -70,7 +73,15 @@ async def _synthesize_single(
     style: str,
     semaphore: asyncio.Semaphore,
 ) -> bytes:
-    """合成单个文本块，返回 WAV bytes。"""
+    """合成单个文本块，返回 WAV bytes。支持缓存。"""
+    # 检查缓存
+    chunk_hash = hashlib.md5(f"{voice}:{text}".encode()).hexdigest()
+    cache_path = TTS_CACHE_DIR / f"{chunk_hash}.wav"
+
+    if cache_path.exists():
+        logger.info(f"  TTS 缓存命中: {chunk_hash[:8]}")
+        return cache_path.read_bytes()
+
     async with semaphore:
         for attempt in range(MAX_RETRIES):
             try:
@@ -84,7 +95,10 @@ async def _synthesize_single(
                 )
                 message = response.choices[0].message
                 if message.audio and message.audio.data:
-                    return base64.b64decode(message.audio.data)
+                    audio_data = base64.b64decode(message.audio.data)
+                    # 保存到缓存
+                    cache_path.write_bytes(audio_data)
+                    return audio_data
                 logger.warning("TTS 返回空音频")
                 return b""
             except Exception as e:
