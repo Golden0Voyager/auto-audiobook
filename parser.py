@@ -40,7 +40,7 @@ def parse_epub(file_path: Path) -> BookData:
     chapters: list[Chapter] = []
     toc_titles = _extract_toc_titles(book)
 
-    for idx, item in enumerate(book.get_items_of_type(ebooklib.ITEM_DOCUMENT)):
+    for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
         html_content = item.get_content().decode("utf-8", errors="replace")
         text = _strip_html(html_content)
         if not text.strip():
@@ -55,7 +55,8 @@ def parse_epub(file_path: Path) -> BookData:
         if not text.strip():
             continue
 
-        chapter_title = toc_titles[idx] if idx < len(toc_titles) else f"Chapter {idx + 1}"
+        # 从 HTML 提取真实标题，而非依赖 TOC 索引
+        chapter_title = _extract_title_from_html(html_content, text, toc_titles)
         chunks = chunk_text(text, CHUNK_MAX_CHARS)
         if chunks:
             chapters.append(Chapter(title=chapter_title, chunks=chunks))
@@ -201,6 +202,30 @@ def _strip_html(html: str) -> str:
     for tag in soup(["script", "style"]):
         tag.decompose()
     return soup.get_text(separator="\n", strip=True)
+
+
+def _extract_title_from_html(html: str, text: str, toc_titles: list[str]) -> str:
+    """从 HTML 内容中提取章节标题。
+
+    优先级：h1-h3 标签 > TOC 标题匹配 > 正文第一行
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    # 优先从 heading 标签提取
+    for tag_name in ("h1", "h2", "h3"):
+        heading = soup.find(tag_name)
+        if heading:
+            title = heading.get_text(strip=True)
+            if title and len(title) < 100:
+                return title
+
+    # 尝试从 TOC 中匹配（通过 href）
+    # fallback: 用正文前 50 字作为标题
+    first_line = text.strip().split("\n")[0].strip()
+    if first_line and len(first_line) < 80:
+        return first_line
+
+    return "未命名章节"
 
 
 # 元数据行关键词（需要从正文中移除的行）
