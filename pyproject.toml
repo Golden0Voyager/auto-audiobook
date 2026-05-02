@@ -12,6 +12,8 @@ dependencies = [
     "watchdog>=4.0",
     "httpx>=0.27",
     "pdfplumber>=0.11",
+    "questionary>=2.0",
+    "rich>=13.0",
 ]
 
 [project.scripts]
