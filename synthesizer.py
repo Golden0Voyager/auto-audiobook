@@ -24,6 +24,7 @@ from config import (
     TTS_VOICES,
 )
 from cleaner import CleanedChapter
+from text_processor import optimize_for_speech
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +75,11 @@ async def _synthesize_single(
     semaphore: asyncio.Semaphore,
 ) -> bytes:
     """合成单个文本块，返回 WAV bytes。支持缓存。"""
-    # 检查缓存
-    chunk_hash = hashlib.md5(f"{voice}:{text}".encode()).hexdigest()
+    # 文本预处理（优化气口和停顿）
+    processed_text = optimize_for_speech(text)
+
+    # 检查缓存（使用处理后的文本计算 hash）
+    chunk_hash = hashlib.md5(f"{voice}:{processed_text}".encode()).hexdigest()
     cache_path = TTS_CACHE_DIR / f"{chunk_hash}.wav"
 
     if cache_path.exists():
@@ -89,7 +93,7 @@ async def _synthesize_single(
                     model=MIMO_TTS_MODEL,
                     messages=[
                         {"role": "user", "content": style},
-                        {"role": "assistant", "content": text},
+                        {"role": "assistant", "content": processed_text},
                     ],
                     audio={"format": TTS_AUDIO_FORMAT, "voice": voice},
                 )
@@ -106,5 +110,5 @@ async def _synthesize_single(
                 logger.warning(f"TTS 失败 (attempt {attempt + 1}): {e}, {delay}s 后重试")
                 await asyncio.sleep(delay)
 
-        logger.error(f"TTS 最终失败: {text[:50]}...")
+        logger.error(f"TTS 最终失败: {processed_text[:50]}...")
         return b""
