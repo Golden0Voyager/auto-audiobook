@@ -53,13 +53,13 @@ class BookHandler(FileSystemEventHandler):
             self._processing.discard(str(path))
 
 
-async def cli_mode(file_path: Path) -> None:
+async def cli_mode(file_path: Path, preview_chunks: int = 0) -> None:
     """CLI 模式：直接处理指定文件。"""
     if not file_path.exists():
         logger.error(f"文件不存在: {file_path}")
         sys.exit(1)
 
-    await process_book(file_path)
+    await process_book(file_path, preview_chunks=preview_chunks)
 
 
 def watch_mode() -> None:
@@ -96,6 +96,13 @@ def main() -> None:
         default="default",
         help="TTS 朗读风格: default(默认), news(新闻), story(故事), casual(轻松), classic(经典)",
     )
+    parser.add_argument(
+        "--preview",
+        type=int,
+        default=0,
+        metavar="N",
+        help="试听模式: 只合成前 N 个文本块，快速验证效果后再全量处理",
+    )
     args = parser.parse_args()
 
     # 动态设置配置
@@ -105,7 +112,7 @@ def main() -> None:
     config.TTS_STYLES = TTS_STYLE_PRESETS[args.style]
 
     if args.file:
-        asyncio.run(cli_mode(args.file))
+        asyncio.run(cli_mode(args.file, preview_chunks=args.preview))
     else:
         watch_mode()
 
