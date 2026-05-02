@@ -47,13 +47,13 @@ def _add_pauses(text: str) -> str:
     text = re.sub(r"\n\s*\n", "\n\n", text)
 
     # 在"但是"、"然而"、"不过"等转折词前添加短停顿
-   转折词 = ["但是", "然而", "不过", "可是", "却", "虽然", "尽管"]
-    for word in 转折词:
+    transition_words = ["但是", "然而", "不过", "可是", "却", "虽然", "尽管"]
+    for word in transition_words:
         text = text.replace(word, f"，{word}")
 
     # 在"首先"、"其次"、"最后"等序列词前添加停顿
-    序列词 = ["首先", "其次", "再次", "最后", "另外", "此外", "同时"]
-    for word in 序列词:
+    sequence_words = ["首先", "其次", "再次", "最后", "另外", "此外", "同时"]
+    for word in sequence_words:
         text = text.replace(word, f"，{word}")
 
     # 在引号前添加短停顿
