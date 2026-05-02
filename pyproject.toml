@@ -1,0 +1,18 @@
+[project]
+name = "auto-audiobook"
+version = "0.1.0"
+description = "自动化有声书生成引擎 — EPUB/MOBI/PDF 转结构化 MP3"
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.30.0",
+    "ebooklib>=0.18",
+    "beautifulsoup4>=4.12",
+    "pydub>=0.25",
+    "mutagen>=1.47",
+    "watchdog>=4.0",
+    "httpx>=0.27",
+    "pdfplumber>=0.11",
+]
+
+[project.scripts]
+auto-audiobook = "main:main"
