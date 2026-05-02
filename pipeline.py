@@ -54,8 +54,8 @@ def _load_cleaned_cache(cache_path: Path) -> tuple[str, str, str, list[CleanedCh
         return None
 
 
-async def process_book(file_path: Path) -> Path:
-    """处理单本书，返回输出目录。支持增量处理。"""
+async def process_book(file_path: Path, preview_chunks: int = 0) -> Path:
+    """处理单本书，返回输出目录。支持增量处理和试听模式。"""
     start = time.time()
     logger.info(f"开始处理: {file_path.name}")
 
@@ -84,6 +84,11 @@ async def process_book(file_path: Path) -> Path:
         _save_cleaned_cache(cache_path, cleaned, book.title, book.author, book.language)
         logger.info(f"  清洗完成: {len(cleaned)} 章节")
         title, author, language = book.title, book.author, book.language
+
+    # 试听模式：截取前 N 个文本块
+    if preview_chunks > 0:
+        cleaned = _truncate_to_chunks(cleaned, preview_chunks)
+        logger.info(f"  试听模式: 截取前 {preview_chunks} 个文本块")
 
     # Phase 3: TTS 合成（支持增量处理）
     output_dir = OUTPUT_DIR / _sanitize_dirname(title)
@@ -126,6 +131,19 @@ async def process_book(file_path: Path) -> Path:
     logger.info(f"处理完成! 耗时: {elapsed:.1f}s, 输出: {output_dir}")
 
     return output_dir
+
+
+def _truncate_to_chunks(chapters: list[CleanedChapter], max_chunks: int) -> list[CleanedChapter]:
+    """截取前 N 个文本块。"""
+    result: list[CleanedChapter] = []
+    remaining = max_chunks
+    for ch in chapters:
+        if remaining <= 0:
+            break
+        truncated_chunks = ch.chunks[:remaining]
+        result.append(CleanedChapter(title=ch.title, chunks=truncated_chunks))
+        remaining -= len(truncated_chunks)
+    return result
 
 
 def _sanitize_dirname(name: str) -> str:
