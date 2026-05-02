@@ -1,0 +1,44 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+*.whl
+
+# === 项目输入输出 ===
+input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
+
+# === 缓存 ===
+output/.cache/
+
+# === 敏感文件 ===
+.env
+.env.*
+secrets.json
+cookies.json
+
+# === 日志 ===
+*.log
+
+# === 编辑器/IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# === 系统文件 ===
+Thumbs.db
+.DS_Store
+
+# === 媒体文件（可选，如果不想跟踪生成的音频）===
+# *.mp3
+# *.wav
