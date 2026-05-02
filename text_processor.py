@@ -46,18 +46,17 @@ def _add_pauses(text: str) -> str:
     # 在段落之间添加较长停顿（用换行表示）
     text = re.sub(r"\n\s*\n", "\n\n", text)
 
-    # 在"但是"、"然而"、"不过"等转折词前添加短停顿
-    transition_words = ["但是", "然而", "不过", "可是", "却", "虽然", "尽管"]
-    for word in transition_words:
-        text = text.replace(word, f"，{word}")
+    # 在转折词/序列词前添加停顿（仅当前面不是标点符号时）
+    pause_words = [
+        "但是", "然而", "不过", "可是", "虽然", "尽管",
+        "首先", "其次", "再次", "最后", "另外", "此外", "同时",
+    ]
+    for word in pause_words:
+        text = re.sub(rf"([，。！？；\s\n]){word}", rf"\1{word}", text)
+        text = re.sub(rf"(?<![，。！？；\s\n]){word}", rf"，{word}", text)
 
-    # 在"首先"、"其次"、"最后"等序列词前添加停顿
-    sequence_words = ["首先", "其次", "再次", "最后", "另外", "此外", "同时"]
-    for word in sequence_words:
-        text = text.replace(word, f"，{word}")
-
-    # 在引号前添加短停顿
-    text = re.sub(r"([^，。！？])\"", r"\1，\"", text)
+    # 在引号前添加短停顿（仅当前面不是标点符号时）
+    text = re.sub(r"([^，。！？；\s\n])\"", r"\1，\"", text)
 
     return text
 
