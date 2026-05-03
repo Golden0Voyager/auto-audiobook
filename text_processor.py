@@ -99,10 +99,12 @@ def _process_numbers(text: str) -> str:
 
     text = re.sub(r"(\d{4})年", _year_to_chinese, text)
 
-    # 百分比：30% -> 百分之三十
+    # 百分比：30% -> 百分之三十（仅转换合理范围内的百分比）
     def _percent_to_chinese(match: re.Match) -> str:
-        num = match.group(1)
-        return f"百分之{_number_to_chinese(int(num))}"
+        num = int(match.group(1))
+        if num > 9999:
+            return match.group(0)  # 超大数字保留原样
+        return f"百分之{_number_to_chinese(num)}"
 
     text = re.sub(r"(\d+)%", _percent_to_chinese, text)
 
@@ -115,15 +117,19 @@ def _number_to_chinese(num: int) -> str:
         return "零"
 
     digits = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"]
-    units = ["", "十", "百", "千", "万"]
+    units = ["", "十", "百", "千", "万", "十", "百", "千", "亿"]
 
     result = ""
     str_num = str(num)
     length = len(str_num)
 
     for i, digit in enumerate(str_num):
+        idx = length - i - 1
         if digit != "0":
-            result += digits[int(digit)] + units[length - i - 1]
+            if idx < len(units):
+                result += digits[int(digit)] + units[idx]
+            else:
+                return str(num)  # 超出范围，直接返回数字字符串
         elif not result.endswith("零"):
             result += "零"
 
