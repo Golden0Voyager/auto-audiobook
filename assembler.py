@@ -11,7 +11,7 @@ from mutagen.mp3 import MP3
 from pydub import AudioSegment
 
 from config import CHAPTER_SILENCE_MS, MP3_BITRATE, MP3_CHANNELS
-from synthesizer import ChapterAudio
+from models import ChapterAudio
 
 
 def assemble_book(
@@ -19,10 +19,11 @@ def assemble_book(
     book_title: str,
     book_author: str,
     output_dir: Path,
-) -> list[Path]:
-    """为整本书生成带标签的 MP3 文件。"""
+) -> tuple[list[Path], int]:
+    """为整本书生成带标签的 MP3 文件。返回 (文件路径列表, 总时长毫秒)。"""
     output_dir.mkdir(parents=True, exist_ok=True)
     output_paths: list[Path] = []
+    total_duration_ms = 0
 
     for ch_audio in chapter_audios:
         if not ch_audio.audio_chunks:
@@ -32,6 +33,8 @@ def assemble_book(
         if len(combined) == 0:
             continue
 
+        total_duration_ms += len(combined)  # pydub AudioSegment len() 返回毫秒
+
         filename = _sanitize_filename(f"{ch_audio.track_num:02d}_{ch_audio.title}.mp3")
         mp3_path = output_dir / filename
 
@@ -39,23 +42,45 @@ def assemble_book(
         write_id3_tags(mp3_path, book_title, book_author, ch_audio.title, ch_audio.track_num)
         output_paths.append(mp3_path)
 
-    return output_paths
+    return output_paths, total_duration_ms
 
 
 def _concat_wav_chunks(chunks: list[bytes]) -> AudioSegment:
-    """拼接多个 WAV bytes 为单个 AudioSegment。"""
-    combined = AudioSegment.empty()
-    silence = AudioSegment.silent(duration=CHAPTER_SILENCE_MS)
+    """拼接多个 WAV bytes 为单个 AudioSegment。O(n) 实现，避免 repeated + 的 O(n²) 拷贝。"""
+    segments = [
+        AudioSegment.from_wav(io.BytesIO(c))
+        for c in chunks if c
+    ]
+    if not segments:
+        return AudioSegment.empty()
 
-    for i, chunk in enumerate(chunks):
-        if not chunk:
-            continue
-        segment = AudioSegment.from_wav(io.BytesIO(chunk))
+    # 统一格式并以第一个 segment 为基准
+    base = segments[0]
+    silence = (
+        AudioSegment.silent(duration=CHAPTER_SILENCE_MS)
+        .set_frame_rate(base.frame_rate)
+        .set_sample_width(base.sample_width)
+        .set_channels(base.channels)
+    )
+
+    # 直接拼接底层 PCM 数据，避免 pydub 每次 + 都全量拷贝
+    parts: list[bytes] = []
+    for i, seg in enumerate(segments):
+        seg = (
+            seg.set_frame_rate(base.frame_rate)
+            .set_sample_width(base.sample_width)
+            .set_channels(base.channels)
+        )
         if i > 0:
-            combined += silence
-        combined += segment
+            parts.append(silence.raw_data)
+        parts.append(seg.raw_data)
 
-    return combined
+    return AudioSegment(
+        data=b"".join(parts),
+        sample_width=base.sample_width,
+        frame_rate=base.frame_rate,
+        channels=base.channels,
+    )
 
 
 def export_to_mp3(audio: AudioSegment, output_path: Path, bitrate: str = MP3_BITRATE) -> None:
