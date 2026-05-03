@@ -15,22 +15,9 @@ from bs4 import BeautifulSoup
 from ebooklib import epub
 
 from config import CHUNK_MAX_CHARS
+from models import BookData, Chapter
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class Chapter:
-    title: str
-    chunks: list[str]
-
-
-@dataclass
-class BookData:
-    title: str
-    author: str
-    language: str = "zh"  # "zh" or "en"
-    chapters: list[Chapter] = field(default_factory=list)
 
 
 def parse_epub(file_path: Path) -> BookData:
@@ -43,7 +30,7 @@ def parse_epub(file_path: Path) -> BookData:
     chapters: list[Chapter] = []
     toc_titles = _extract_toc_titles(book)
 
-    for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
+    for item in _iter_documents_in_spine_order(book):
         try:
             html_content = item.get_content().decode("utf-8", errors="replace")
             text = _strip_html(html_content)
@@ -315,3 +302,32 @@ def _extract_toc_titles(book: epub.EpubBook) -> list[str]:
 
     _walk_toc(book.toc)
     return titles
+
+
+def _iter_documents_in_spine_order(book: epub.EpubBook) -> list:
+    """按 spine 阅读顺序返回 ITEM_DOCUMENT 列表。
+
+    Why: `get_items_of_type` 返回的是 manifest 顺序（通常按文件名），
+    并不一定等于阅读顺序。EPUB 的真正阅读顺序由 spine 决定，否则章节会错位。
+    """
+    items: list = []
+    seen: set[str] = set()
+
+    for spine_entry in book.spine:
+        idref = spine_entry[0] if isinstance(spine_entry, (tuple, list)) else spine_entry
+        item = book.get_item_with_id(idref)
+        if item is None or item.get_type() != ebooklib.ITEM_DOCUMENT:
+            continue
+        items.append(item)
+        seen.add(item.get_id())
+
+    # Fallback: spine 缺失或为空时，回退到 manifest 顺序
+    if not items:
+        return list(book.get_items_of_type(ebooklib.ITEM_DOCUMENT))
+
+    # 补漏：把 spine 未收录但属于 manifest 的文档项追加到末尾
+    for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
+        if item.get_id() not in seen:
+            items.append(item)
+
+    return items
