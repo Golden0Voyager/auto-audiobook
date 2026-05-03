@@ -9,19 +9,65 @@ import shutil
 import time
 from pathlib import Path
 
+import config
 from assembler import assemble_book
-from cleaner import CleanedChapter, clean_chapters
-from config import CLEAN_MODE, OUTPUT_DIR
+from cleaner import clean_chapters
+from models import ChapterAudio, CleanedChapter
 from parser import parse_file
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 from rule_cleaner import clean_chapters as rule_clean_chapters
-from synthesizer import ChapterAudio, synthesize_chapters
+from synthesizer import SynthesisStats, synthesize_chapters
+from text_processor import detect_language
 
 logger = logging.getLogger(__name__)
+console = Console()
+
+
+def _print_summary(
+    title: str,
+    elapsed: float,
+    total_chars: int,
+    total_duration_ms: int,
+    mp3_count: int,
+    tts_stats: SynthesisStats,
+    output_dir: Path,
+) -> None:
+    """用 rich 面板输出处理完成总结。"""
+    duration_sec = total_duration_ms / 1000
+    duration_str = (
+        f"{int(duration_sec // 3600)}:{int((duration_sec % 3600) // 60):02d}:{int(duration_sec % 60):02d}"
+        if duration_sec >= 3600
+        else f"{int(duration_sec // 60):02d}:{int(duration_sec % 60):02d}"
+    )
+
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column(style="bold cyan", justify="right")
+    table.add_column(style="green")
+
+    table.add_row("书名", title)
+    table.add_row("总字数", f"{total_chars:,}")
+    table.add_row("处理用时", f"{elapsed:.1f}s")
+    table.add_row("可播放时长", duration_str)
+    table.add_row("生成文件", f"{mp3_count} 个 MP3")
+    table.add_row("TTS 缓存命中", f"{tts_stats.cache_hits}")
+    table.add_row("TTS API 调用", f"{tts_stats.api_calls}")
+    if tts_stats.failed_chunks > 0:
+        table.add_row("[red]TTS 失败块[/red]", f"[red]{tts_stats.failed_chunks}[/red]")
+
+    panel = Panel(
+        table,
+        title="[bold green]处理完成[/bold green]",
+        border_style="green",
+        subtitle=f"[dim]{output_dir}[/dim]",
+    )
+    console.print(panel)
 
 
 def _get_cache_path(file_path: Path) -> Path:
     """获取清洗结果缓存文件路径。"""
-    cache_dir = OUTPUT_DIR / ".cache"
+    cache_dir = config.OUTPUT_DIR / ".cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir / f"{file_path.stem}_cleaned.json"
 
@@ -76,7 +122,7 @@ async def process_book(file_path: Path, preview_chunks: int = 0) -> Path:
         logger.info(f"[2/4] 从缓存恢复清洗结果: {len(cleaned)} 章节")
     else:
         chapter_tuples = [(ch.title, ch.chunks) for ch in book.chapters]
-        if CLEAN_MODE == "llm":
+        if config.CLEAN_MODE == "llm":
             logger.info("[2/4] LLM 清洗文本...")
             cleaned = await clean_chapters(chapter_tuples)
         else:
@@ -86,13 +132,16 @@ async def process_book(file_path: Path, preview_chunks: int = 0) -> Path:
         logger.info(f"  清洗完成: {len(cleaned)} 章节")
         title, author, language = book.title, book.author, book.language
 
+    # 统计字数
+    total_chars = sum(len(chunk) for ch in cleaned for chunk in ch.chunks)
+
     # 试听模式：截取前 N 个文本块
     if preview_chunks > 0:
         cleaned = _truncate_to_chunks(cleaned, preview_chunks)
         logger.info(f"  试听模式: 截取前 {preview_chunks} 个文本块")
 
     # Phase 3: TTS 合成（支持增量处理）
-    output_dir = OUTPUT_DIR / _build_output_dirname(file_path, title)
+    output_dir = config.OUTPUT_DIR / _build_output_dirname(file_path, title)
     existing_chapters = _get_existing_chapters(output_dir)
 
     if existing_chapters:
@@ -107,12 +156,13 @@ async def process_book(file_path: Path, preview_chunks: int = 0) -> Path:
         if idx + 1 not in existing_chapters
     ]
 
+    tts_stats = SynthesisStats(total_chunks=0, cache_hits=0, api_calls=0, failed_chunks=0)
     if not chapters_to_process:
         logger.info("  所有章节已处理完成，跳过 TTS 合成")
         chapter_audios = []
     else:
         logger.info(f"  需要处理 {len(chapters_to_process)} 个章节")
-        chapter_audios = await synthesize_chapters(
+        chapter_audios, tts_stats = await synthesize_chapters(
             [ch for _, ch in chapters_to_process],
             language=language
         )
@@ -125,20 +175,43 @@ async def process_book(file_path: Path, preview_chunks: int = 0) -> Path:
 
     # Phase 4: 音频拼接
     logger.info("[4/4] 音频拼接与导出...")
-    mp3_paths = assemble_book(chapter_audios, title, author, output_dir)
+    mp3_paths, total_duration_ms = assemble_book(chapter_audios, title, author, output_dir)
     logger.info(f"  导出完成: {len(mp3_paths)} 个 MP3 文件")
 
-    elapsed = time.time() - start
-    logger.info(f"处理完成! 耗时: {elapsed:.1f}s, 输出: {output_dir}")
+    # 增量模式下已有 MP3 不会被 assemble_book 重新统计，补充扫描
+    if not mp3_paths and existing_chapters:
+        from mutagen.mp3 import MP3
+        mp3_paths = sorted(output_dir.glob("*.mp3"))
+        total_duration_ms = 0
+        for p in mp3_paths:
+            try:
+                audio = MP3(str(p))
+                total_duration_ms += int(audio.info.length * 1000)
+            except Exception:
+                pass
+        logger.info(f"  检测到已有 {len(mp3_paths)} 个 MP3 文件")
 
-    # 将源文件移入输出目录
+    elapsed = time.time() - start
+
+    # 显示完成总结面板
+    _print_summary(
+        title=title,
+        elapsed=elapsed,
+        total_chars=total_chars,
+        total_duration_ms=total_duration_ms,
+        mp3_count=len(mp3_paths),
+        tts_stats=tts_stats,
+        output_dir=output_dir,
+    )
+
+    # 将源文件复制到输出目录（保留原文件，避免破坏性操作）
     try:
         dest = output_dir / file_path.name
         if not dest.exists():
-            shutil.move(str(file_path), str(dest))
-            logger.info(f"  源文件已移至: {dest}")
+            shutil.copy2(str(file_path), str(dest))
+            logger.info(f"  源文件已复制到: {dest}")
     except Exception as e:
-        logger.warning(f"  源文件移动失败: {e}")
+        logger.warning(f"  源文件复制失败: {e}")
 
     return output_dir
 
@@ -171,7 +244,7 @@ def _sanitize_dirname(name: str) -> str:
 
 
 def _get_existing_chapters(output_dir: Path) -> set[int]:
-    """获取已存在的 MP3 文件对应的章节编号。"""
+    """获取已完成的 MP3 章节编号。文件存在但损坏的会重制，避免断点续传卡死。"""
     if not output_dir.exists():
         return set()
 
@@ -179,6 +252,17 @@ def _get_existing_chapters(output_dir: Path) -> set[int]:
     for mp3_file in output_dir.glob("*.mp3"):
         # 从文件名提取章节编号，格式如 "01_章节标题.mp3"
         match = re.match(r"^(\d+)_", mp3_file.name)
-        if match:
-            existing.add(int(match.group(1)))
+        if not match:
+            continue
+
+        # 校验 MP3 是否有效（非空、可解析）
+        try:
+            from mutagen.mp3 import MP3
+            audio = MP3(str(mp3_file))
+            if audio.info.length <= 0:
+                continue
+        except Exception:
+            continue
+
+        existing.add(int(match.group(1)))
     return existing
