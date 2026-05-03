@@ -45,7 +45,7 @@ VOICE_PROFILES: dict[str, dict[str, dict[str, str]]] = {
         },
         "en": {
             "literary_male": "A literary male narrator with a measured, thoughtful pace, deep and contemplative, suitable for philosophy and history",
-            "elegant_female": "An elegant female narrator with intellectual depth,从容 graceful, suitable for literary criticism and humanities",
+            "elegant_female": "An elegant female narrator with intellectual depth, graceful and composed, suitable for literary criticism and humanities",
         },
     },
 
@@ -118,3 +118,42 @@ def get_voice_names(category: str, lang: str) -> list[str]:
 def get_voice_description(category: str, lang: str, voice_name: str) -> str:
     """获取指定音色的描述文本。"""
     return VOICE_PROFILES.get(category, {}).get(lang, {}).get(voice_name, "")
+
+
+def display_voice_profiles() -> None:
+    """显示所有可用的音色配置。"""
+    from rich.console import Console
+    from rich.table import Table
+    from rich.panel import Panel
+
+    console = Console()
+
+    # 标准 TTS 模型预设音色
+    console.print(Panel("[bold cyan]可用音色 (mimo-v2.5-tts)[/bold cyan]", border_style="cyan"))
+
+    table = Table(title="预设音色", border_style="green", show_header=True, header_style="bold magenta")
+    table.add_column("语言", style="cyan", width=6)
+    table.add_column("音色名称", style="green")
+    table.add_column("说明")
+
+    voices = {
+        "zh": [
+            ("茉莉", "温柔女声，适合有声书、杂志"),
+            ("苏打", "活力男声，适合科技、新闻"),
+            ("白桦", "沉稳男声，适合传记、财经"),
+            ("冰糖", "甜美女声，适合小说、艺术"),
+        ],
+        "en": [
+            ("Mia", "Warm female, suitable for audiobooks"),
+            ("Chloe", "Professional female, suitable for news"),
+            ("Milo", "Calm male, suitable for biography"),
+            ("Dean", "Authoritative male, suitable for finance"),
+        ],
+    }
+
+    for lang in ["zh", "en"]:
+        lang_name = "中文" if lang == "zh" else "英文"
+        for voice_name, description in voices[lang]:
+            table.add_row(lang_name, voice_name, description)
+
+    console.print(table)
