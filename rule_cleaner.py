@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from cleaner import CleanedChapter
+from models import CleanedChapter
 
 
 def clean_chapters(
