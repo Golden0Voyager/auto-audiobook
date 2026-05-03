@@ -16,6 +16,7 @@ from config import (
     MIMO_LLM_MODEL,
     RETRY_BASE_DELAY,
 )
+from models import CleanedChapter
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +30,6 @@ SYSTEM_PROMPT = """你是一个文本预处理专家，任务是将电子书文�
 5. 保持原文的核心含义和叙事逻辑不变
 6. 不要添加任何解释或评论，只输出清洗后的文本
 7. 如果原文已经是正常叙述文本，原样返回即可"""
-
-
-@dataclass
-class CleanedChapter:
-    title: str
-    chunks: list[str]
 
 
 async def clean_chapters(
