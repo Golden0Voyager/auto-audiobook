@@ -14,7 +14,23 @@ dependencies = [
     "pdfplumber>=0.11",
     "questionary>=2.0",
     "rich>=13.0",
+    "python-dotenv>=1.0",
 ]
 
 [project.scripts]
 auto-audiobook = "main:main"
+
+[tool.setuptools]
+py-modules = [
+    "main",
+    "config",
+    "parser",
+    "cleaner",
+    "rule_cleaner",
+    "synthesizer",
+    "assembler",
+    "pipeline",
+    "text_processor",
+    "voice_profiles",
+    "models",
+]
