@@ -7,6 +7,7 @@ import asyncio
 import logging
 import sys
 import time
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -118,6 +119,7 @@ async def batch_process(files: list[Path], preview_chunks: int = 0) -> list[Book
             elapsed = time.time() - start
             results.append(BookResult(file_path=file_path, success=False, elapsed=elapsed, error=str(e)))
             logger.error(f"[{i}/{total}] 失败: {e}")
+            logger.error(traceback.format_exc())
 
     return results
 
