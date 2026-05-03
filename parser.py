@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import subprocess
 import tempfile
@@ -14,6 +15,8 @@ from bs4 import BeautifulSoup
 from ebooklib import epub
 
 from config import CHUNK_MAX_CHARS
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -41,25 +44,29 @@ def parse_epub(file_path: Path) -> BookData:
     toc_titles = _extract_toc_titles(book)
 
     for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
-        html_content = item.get_content().decode("utf-8", errors="replace")
-        text = _strip_html(html_content)
-        if not text.strip():
-            continue
+        try:
+            html_content = item.get_content().decode("utf-8", errors="replace")
+            text = _strip_html(html_content)
+            if not text.strip():
+                continue
 
-        # 跳过纯目录页面
-        if _is_toc_page(text):
-            continue
+            # 跳过纯目录页面
+            if _is_toc_page(text):
+                continue
 
-        # 清理元数据行
-        text = _clean_metadata_lines(text)
-        if not text.strip():
-            continue
+            # 清理元数据行
+            text = _clean_metadata_lines(text)
+            if not text.strip():
+                continue
 
-        # 从 HTML 提取真实标题，而非依赖 TOC 索引
-        chapter_title = _extract_title_from_html(html_content, text, toc_titles)
-        chunks = chunk_text(text, CHUNK_MAX_CHARS)
-        if chunks:
-            chapters.append(Chapter(title=chapter_title, chunks=chunks))
+            # 从 HTML 提取真实标题，而非依赖 TOC 索引
+            chapter_title = _extract_title_from_html(html_content, text, toc_titles)
+            chunks = chunk_text(text, CHUNK_MAX_CHARS)
+            if chunks:
+                chapters.append(Chapter(title=chapter_title, chunks=chunks))
+        except Exception as e:
+            logger.warning(f"  跳过文档项 {item.get_name()}: {e}")
+            continue
 
     language = detect_language(chapters)
     return BookData(title=title, author=author, language=language, chapters=chapters)
