@@ -29,6 +29,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 抑制 httpx/httpcore 在事件循环关闭时的清理警告
+logging.getLogger("httpx").setLevel(logging.ERROR)
+logging.getLogger("httpcore").setLevel(logging.ERROR)
+
 SUPPORTED_EXTENSIONS = {".epub", ".mobi", ".pdf"}
 
 
