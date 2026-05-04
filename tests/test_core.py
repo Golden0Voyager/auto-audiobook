@@ -38,11 +38,33 @@ class TestChunkText:
         assert "A" in chunks[0]
         assert "B" in chunks[1]
 
-    def test_long_paragraph_split(self):
-        # 一个超长段落应该被按句子拆分
+    def test_sentence_boundary_fallback(self):
+        # 无段落边界时 fallback 到句子边界
         text = "第一句。第二句。第三句。" * 100
         chunks = chunk_text(text, max_chars=100)
         assert all(len(c) <= 100 for c in chunks)
+
+    def test_extends_to_hard_limit(self):
+        # 600 字内无自然边界时，向后扩展到 900 找最近边界
+        # 构造一段 750 字的无标点文本，后面紧跟一个句号
+        text = "A" * 750 + "。"
+        chunks = chunk_text(text, max_chars=600)
+        assert len(chunks) == 1
+        assert len(chunks[0]) == 751  # 750 个 A + 句号
+
+    def test_hard_cut_at_900(self):
+        # 900 字内完全无边界时，硬切在 900
+        text = "B" * 2000
+        chunks = chunk_text(text, max_chars=600)
+        assert len(chunks[0]) == 900
+        assert len(chunks[1]) == 900
+        assert len(chunks[2]) == 200
+
+    def test_never_exceeds_hard_limit(self):
+        # 任何 chunk 都不超过 hard limit（默认 900）
+        text = "C" * 3000
+        chunks = chunk_text(text, max_chars=600)
+        assert all(len(c) <= 900 for c in chunks)
 
 
 class TestCleanChunk:
