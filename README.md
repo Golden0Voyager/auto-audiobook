@@ -1,266 +1,282 @@
+🌍 [English](README.md) | [简体中文](README.zh-CN.md)
+
 >
-> 首先感谢 [Xiaomi MiMo](https://www.xiaomimimo.com/) Orbit「百万亿 Token 创造者激励计划」赠送的一个月 Token Pro 套餐。本项目使用的 MiMo-V2.5-TTS 模型目前处于**限时免费调用**阶段，虽然生成效果并非业界最顶尖，但量大管饱、非常慷慨。
+> Special thanks to [Xiaomi MiMo](https://www.xiaomimimo.com/) Orbit "Trillion Token Creator Incentive Program" for providing a one-month Token Pro package. The MiMo-V2.5-TTS model used in this project is currently in the **limited-time free trial** stage. While the generation quality might not be the absolute top in the industry, it is generous and highly efficient for batch processing.
 >
-> 我在使用过程中发现，长文本朗读时模型的语音一致性会随上下文长度衰减（中后段语速变快、咬字模糊），因此在工程上做了大量优化（动态分块、风格保鲜、并发控制等），最终效果令人满意。开源出来分享给有需要的人——我的初衷很简单：**给家里的老人制作有声书**。实测生成效率约为 **1:60**（1 秒处理时间生成 1 分钟音频），完全可以接受。
+> During usage, I noticed that for long-text reading, the model's voice consistency tends to degrade as the context length increases (speeding up or becoming blurred in the middle and later stages). Therefore, I have implemented significant optimizations (dynamic chunking, style preservation, concurrency control, etc.), leading to satisfying results. I'm open-sourcing this for anyone in need—my original motivation was simple: **My parents find it uncomfortable to stare at mobile screens for long periods, so I built this generator to create audiobooks for them to enjoy while resting or exercising.** The actual generation efficiency is approximately **1:60** (1 second of processing for 1 minute of audio), which is quite acceptable.
 >
-> 这个项目的基础框架是我用 MiMo-V2.5-Pro 花了半天时间手搓出来的，后续的优化和升级全程靠 **Kimi 2.6 for Coding** 的 vibe coding 能力完成。我不是专业开发者，只是五一假期在家玩票。不得不说，小米一个月 7 亿 Token 的额度虽然听起来很多，实际跑起来完全不够用——这才 3 天就已经烧了 40%（当然还有别的项目和工作在跑），希望小米未来真的考虑一下用量扩容的事儿。
+> The base framework of this project was manually prototyped by me using MiMo-V2.5-Pro in half a day, and subsequent optimizations were entirely completed through the **vibe coding** capabilities of **Kimi 2.6 for Coding**. I am not a professional developer; I just tinkered with this during the May Day holiday. I must say, although Xiaomi's 700 million token monthly quota sounds like a lot, it burns through surprisingly fast—40% was consumed in just 3 days (with other projects running). I hope Xiaomi considers expanding the quota in the future.
 
 # Auto-Audiobook
 
-自动化有声书生成引擎 —— 将 EPUB/MOBI/PDF 一键转化为结构化 MP3。
+Automated audiobook generation engine —— Converting EPUB / MOBI / PDF to structured MP3 with one click.
 
-基于 MiMo-V2.5 TTS 与 LLM，支持并发合成、断点续传、音色选择、试听预览。零人工干预，异步高并发。
+Based on MiMo-V2.5 TTS and LLM, supporting concurrent synthesis, breakpoint resume, voice selection, and preview. Zero manual intervention, asynchronous high concurrency.
 
 ---
 
-## 功能特性
+## Features
 
-| 特性 | 说明 |
+| Feature | Description |
 |------|------|
-| **格式支持** | EPUB / MOBI / PDF |
-| **TTS 引擎** | MiMo-V2.5-TTS（OpenAI 兼容 API） |
-| **并发合成** | 默认 24 并发，支持断点续传 |
-| **音色选择** | 中文（茉莉、白桦、苏打、冰糖），英文（Mia、Milo、Chloe、Dean） |
-| **朗读风格** | 默认 / 新闻 / 故事 / 传记 / 知识，通过 style prompt 控制语速与语气 |
-| **试听预览** | 处理前先合成一段试听，满意后再全量处理 |
-| **增量处理** | 自动跳过已完成的章节，支持断点续传 |
-| **TTS 缓存** | 自动缓存合成结果，重复内容零 API 调用 |
-| **音频输出** | 256kbps 单声道 MP3，带 ID3 标签（书名、作者、章节标题） |
-| **目录监听** | Watchdog 模式，放入文件即自动处理 |
+| **Format Support** | EPUB / MOBI / PDF |
+| **TTS Engine** | MiMo-V2.5-TTS (OpenAI-compatible API) |
+| **Concurrent Synthesis** | Default 24 threads, supports breakpoint resume |
+| **Voice Selection** | Chinese (Molly, Birch, Soda, RockSugar), English (Mia, Milo, Chloe, Dean) |
+| **Reading Style** | Default / News / Story / Biography / Knowledge, controlled by style prompts |
+| **Preview** | Synthesize a trial snippet before full processing |
+| **Incremental Processing** | Automatically skip completed chapters, support for resuming |
+| **TTS Cache** | Result caching for zero-cost repeated content synthesis |
+| **Audio Output** | 256kbps mono MP3 with ID3 tags (Title, Author, Chapter) |
+| **Directory Monitoring** | Watchdog mode for automated processing of new files |
 
 ---
 
-## 快速开始
+## Quick Start
 
-### 1. 安装依赖
+### 1. Install Dependencies
 
 ```bash
-# 克隆项目
+# Clone the repo
 git clone <repo-url>
 cd auto_audiobook
 
-# 安装依赖（推荐 uv）
+# Install dependencies (uv recommended)
 uv pip install -e .
 
-# 或传统方式
+# Or traditional pip
 pip install -e .
 ```
 
-### 2. 配置环境变量
+### 2. Configure Environment Variables
 
-创建 `.env` 文件：
+Create a `.env` file:
 
 ```bash
 XIAOMI_MIMO_API_KEY=your_api_key_here
 ```
 
-> 如需代理：
+> **Get API Key**: Please go to the [MiMo Platform Console](https://platform.xiaomimimo.com/) to apply for and obtain your API Key.
+>
+> **Important Note**:
+> - Both **Standard API Keys** and **Coding Plan Keys** can access the current TTS model.
+> - **Avoid Mismatch**: They correspond to different `BASE_URL` values. Please ensure you use the correct URL for your key type to avoid configuration errors.
+> - **Cost Reference**: The model is currently in a limited-time free trial. Real-world testing showed nearly 2 million tokens consumed in 2 days with zero cost.
+
+![Token Usage](docs/assets/token_usage.png)
+
+> If proxy is needed:
 > ```bash
 > export https_proxy=http://127.0.0.1:7897
 > export http_proxy=http://127.0.0.1:7897
 > ```
 
-### 3. 放入书籍
+### 3. Add Books
 
-将 EPUB/MOBI/PDF 文件放入 `input/` 目录。
+Place EPUB / MOBI / PDF files into the `input/` directory.
 
-### 4. 运行
+### 4. Run
 
-**交互模式（推荐）**：
+**Interactive Mode (Recommended)**:
 
 ```bash
 python main.py
 ```
 
-流程：选择文件 → 确认语言 → 选择音色（男/女）→ 选择风格 → 试听预览 → 开始处理。
+Process: Select file → Confirm language → Select voice (Male/Female) → Select style → Preview snippet → Start processing.
 
-**CLI 模式**：
+**CLI Mode**:
 
 ```bash
-# 单本处理
+# Single file processing
 python main.py --file input/book.epub
 
-# 批量处理目录
+# Batch processing a directory
 python main.py --input-dir input/
 
-# 使用 LLM 清洗（默认规则引擎）
+# Use LLM for cleaning (Default: rule-based engine)
 python main.py --file input/book.epub --clean-mode llm
 ```
 
-**Watchdog 监听模式**：
+**Watchdog Monitoring Mode**:
 
 ```bash
 python main.py
-# 选择「监听目录」
+# Select "Monitor Directory"
 ```
 
 ---
 
-## 最佳实践
+## Best Practices
 
-### 1. 文本分块：600 字是甜点
+### 1. Text Chunking: 600 characters is the sweet spot
 
-MiMo TTS 的 style prompt（如"语速偏慢、吐字清晰"）在长文本中会衰减。我们的经验：
+The style prompts of MiMo TTS (e.g., "slow speed, clear articulation") tend to decay in long texts. Our experience:
 
-| 分块大小 | 效果 | 建议 |
+| Chunk Size | Performance | Recommendation |
 |----------|------|------|
-| 3000 字 | 中后段 style 失效，囫囵吞字 | 不推荐 |
-| 1500 字 | 仍有波动，偶发语速加快 | 不推荐 |
-| **600 字** | **style 始终有效，音质稳定** | **推荐** |
+| 3000 chars | Style fails in the later stage, blurred pronunciation | Not recommended |
+| 1500 chars | Still some fluctuations, occasional speed-up | Not recommended |
+| **600 chars** | **Style remains effective, stable quality** | **Recommended** |
 
-本项目采用 **600 字软限制 + 900 字硬限制** 的动态分块策略：
-- 优先在段落边界切分
-- 其次在句子边界切分
-- 宁可 chunk 稍长（600~900 字），也**禁止在句子中间切断**
-- 极端无标点文本（如代码）才会硬切在 900 字
+This project adopts a **600-char soft limit + 900-char hard limit** dynamic chunking strategy:
+- Prioritize splitting at paragraph boundaries.
+- Secondarily at sentence boundaries.
+- Prefer slightly longer chunks (600~900 chars) over cutting in the middle of a sentence.
+- Hard cuts at 900 chars are only used for text without punctuation (e.g., code).
 
-### 2. 并发控制：24 是上限
+### 2. Concurrency Control: 24 is the upper limit
 
-MiMo TTS 官方限流：**RPM 100**（每分钟 100 请求）。
+MiMo TTS official rate limit: **RPM 100** (100 requests per minute).
 
-| 并发数 | 表现 | 建议 |
+| Concurrency | Behavior | Recommendation |
 |--------|------|------|
-| 50 | 失败率 17%，大量空音频 | 过高 |
-| 27 | 偶发 attempt 1 失败，需重试 | 临界 |
-| **24** | **稳定，极少触发限流** | **推荐** |
-| 20 | 更保守，速度慢约 10% | 安全 |
+| 50 | 17% failure rate, lots of empty audio | Too high |
+| 27 | Occasional attempt 1 failure, requires retry | Critical |
+| **24** | **Stable, rarely triggers rate limiting** | **Recommended** |
+| 20 | More conservative, ~10% slower | Safe |
 
-> 失败表现为"TTS 返回空音频"，系统会自动重试（最多 3 次），但会拖慢整体速度。
+> Failures manifest as "TTS returned empty audio". The system will automatically retry up to 3 times, but it slows down the overall speed.
 
-### 3. 先试听，再批量
+### 3. Preview first, then batch
 
-不同音色和风格差异很大。处理前先试听（交互模式自动触发）：
-- 取第一章前 2 个 chunks 合成临时 MP3
-- 播放试听
-- 不满意可切换音色/风格后重试
-- **避免批量处理后才发现效果不佳，浪费 API 调用**
+Voices and styles vary significantly. Preview before full processing (automatically triggered in interactive mode):
+- Synthesize the first 2 chunks of the first chapter into a temporary MP3.
+- Play and listen.
+- If unsatisfied, switch voice/style and try again.
+- **Avoid batch processing only to find the results unsatisfactory, wasting API tokens.**
 
-### 4. 缓存自动失效机制
+### 4. Automatic Cache Invalidation
 
-TTS 缓存键包含：`模型 + 音色 + 风格 + 文本`。这意味着：
-- 切换音色 → 缓存自动失效（不会读到旧音频）
-- 切换风格 → 缓存自动失效
-- 分块算法变更 → 缓存自动失效
+TTS cache keys include: `Model + Voice + Style + Text`. This means:
+- Switching Voice → Cache invalidates automatically.
+- Switching Style → Cache invalidates automatically.
+- Changing Chunking Algorithm → Cache invalidates automatically.
 
-首次使用新配置时 0% 缓存命中属正常现象。
+### 5. Breakpoint Resumption and Incremental Processing
 
-### 5. 断点续传与增量处理
+Chapters with valid MP3s already in the output directory will be automatically skipped:
+- Suitable for processing long books across multiple sessions.
+- Suitable for recovery after network interruptions.
+- Note: Existing MP3s are verified for duration via mutagen; corrupted files are remade.
 
-输出目录中已存在有效 MP3 的章节会自动跳过：
-- 适合长书分多次处理
-- 适合网络不稳定时中断后恢复
-- 注意：已有 MP3 会通过 mutagen 校验时长，损坏文件会自动重制
+### 6. EPUB Chapter Order
 
-### 6. EPUB 章节顺序
-
-本项目按 EPUB **spine** 顺序读取章节（而非 manifest 的物理文件顺序），确保阅读顺序正确。
+This project reads chapters according to the EPUB **spine** order (rather than the physical file order in manifest), ensuring correct reading sequence.
 
 ---
 
-## 架构
+## Architecture
 
 ```
 input/  ──→  parser.py  ──→  cleaner.py  ──→  synthesizer.py  ──→  assembler.py  ──→  output/
-              (EPUB/PDF)      (文本清洗)        (TTS 合成)          (音频拼接)
+              (EPUB/PDF)      (Text Cleaning)   (TTS Synthesis)    (Audio Merging)
                                 ↓
                          rule_cleaner.py
-                         (零 API 调用)
+                         (Zero API Cost)
 ```
 
-| 文件 | 职责 |
+| File | Responsibility |
 |------|------|
-| `main.py` | CLI 入口、交互式界面、Watchdog 监听 |
-| `config.py` | 配置管理（路径、API、音频参数、音色库） |
-| `parser.py` | EPUB/MOBI/PDF 解析、文本分块 |
-| `cleaner.py` | LLM 智能清洗（MiMo-V2.5-Pro） |
-| `rule_cleaner.py` | 规则引擎清洗（零 API 调用，默认） |
-| `synthesizer.py` | MiMo TTS 并发合成、缓存、进度条 |
-| `assembler.py` | WAV 拼接、MP3 导出、ID3 标签 |
-| `pipeline.py` | 主流水线编排、增量恢复、总结面板 |
-| `text_processor.py` | 数字转中文读法、标点规范化 |
-| `models.py` | 核心数据模型（避免循环导入） |
-| `voice_profiles.py` | 音色库与场景描述 |
+| `main.py` | CLI Entry, Interactive Interface, Watchdog Monitoring |
+| `config.py` | Configuration (Paths, API, Audio params, Voice profiles) |
+| `parser.py` | EPUB / MOBI / PDF parsing, text chunking |
+| `cleaner.py` | LLM-based intelligent cleaning (MiMo-V2.5-Pro) |
+| `rule_cleaner.py` | Rule-based cleaning (Zero API cost, default) |
+| `synthesizer.py` | Concurrent synthesis, caching, progress tracking |
+| `assembler.py` | WAV merging, MP3 export, ID3 tagging |
+| `pipeline.py` | Pipeline orchestration, incremental recovery, summary dashboard |
+| `text_processor.py` | Number-to-Chinese conversion, punctuation normalization |
+| `models.py` | Core data models (avoiding circular imports) |
+| `voice_profiles.py` | Voice profiles and scenario descriptions |
 
 ---
 
-## 配置参考
+## Configuration Reference
 
-### 环境变量
+### Environment Variables
 
-| 变量 | 说明 | 默认值 |
+| Variable | Description | Default Value |
 |------|------|--------|
-| `XIAOMI_MIMO_API_KEY` | MiMo API Key | （必填） |
-| `XIAOMI_MIMO_BASE_URL` | API 基础地址 | `https://api.xiaomimimo.com/v1` |
-| `TTS_CONCURRENCY` | TTS 并发数 | `24` |
-| `LLM_CONCURRENCY` | LLM 清洗并发数 | `5` |
+| `XIAOMI_MIMO_API_KEY` | MiMo API Key | (Required) |
+| `XIAOMI_MIMO_BASE_URL` | API Base URL | `https://api.xiaomimimo.com/v1` |
+| `TTS_CONCURRENCY` | TTS concurrency threads | `24` |
+| `LLM_CONCURRENCY` | LLM cleaning concurrency | `5` |
 
-### 运行时配置（config.py）
+### Runtime Configuration (config.py)
 
-| 参数 | 说明 | 默认值 |
+| Parameter | Description | Default Value |
 |------|------|--------|
-| `CHUNK_MAX_CHARS` | 分块软限制 | `600` |
-| `CHUNK_HARD_LIMIT` | 分块硬上限 | `900` |
-| `TTS_STYLE` | 朗读风格 | `default` |
-| `CLEAN_MODE` | 清洗模式 | `rule`（可选 `llm`） |
-| `MP3_BITRATE` | 输出码率 | `256k` |
-| `CHAPTER_SILENCE_MS` | 章节间静音 | `1500` |
+| `CHUNK_MAX_CHARS` | Soft limit for chunking | `600` |
+| `CHUNK_HARD_LIMIT` | Hard limit for chunking | `900` |
+| `TTS_STYLE` | Reading style | `default` |
+| `CLEAN_MODE` | Cleaning mode | `rule` (or `llm`) |
+| `MP3_BITRATE` | Output bitrate | `256k` |
+| `CHAPTER_SILENCE_MS` | Silence between chapters | `1500` |
 
 ---
 
-## 性能数据
+## Performance Data
 
-实测环境：MacBook Air M2，Clash Verge 代理，MiMo-V2.5-TTS。
+Test environment: MacBook Air M2, Clash Verge proxy, MiMo-V2.5-TTS.
 
-| 书籍 | 字数 | chunk 数 | 处理时间 | 音频时长 | RTF |
+| Book | Chars | Chunks | Process Time | Audio Duration | RTF |
 |------|------|----------|----------|----------|-----|
-| 我在北京送快递 | 12.9 万 | 234 | 8 分 | 8:15:20 | 0.016 |
-| 世上为什么要有图书馆 | ~15 万 | ~300 | 15.3 分 | ~10 小时 | ~0.025 |
-| 筚路维艰 | ~18 万 | 372 | 14.1 分 | ~11 小时 | ~0.021 |
+| 我在北京送快递 | 129k | 234 | 8 min | 8:15:20 | 0.016 |
+| 世上为什么要有图书馆 | ~150k | ~300 | 15.3 min | ~10 hours | ~0.025 |
+| 筚路维艰 | ~180k | 372 | 14.1 min | ~11 hours | ~0.021 |
 
-> RTF（实时因子）= 处理时间 / 音频时长。值越小越快。本项目在 24 并发下约 **40~60 倍实时**。
-
----
-
-## 常见问题
-
-**Q: 为什么有些 chunk 会出现"TTS 返回空音频"？**
-
-A: 这是 MiMo TTS 的 RPM 限流（100 请求/分钟）导致的。系统会自动重试，通常 attempt 2 或 3 会成功。如果频繁出现，可将 `TTS_CONCURRENCY` 降到 20。
-
-**Q: 可以换其他 TTS 引擎吗？**
-
-A: 当前深度绑定 MiMo 的 OpenAI 兼容 API。如需接入其他引擎（如 Azure TTS、Edge TTS），需修改 `synthesizer.py` 中的 `_synthesize_single` 函数。
-
-**Q: 支持哪些语言？**
-
-A: 当前主要优化中文和英文。自动语言检测基于文本采样，中文书用中文音色，英文书用英文音色。
-
-**Q: 生成的有声书可以上传到播客平台吗？**
-
-A: **不建议**。这些是商业出版物的完整朗读，上传到公开平台（喜马拉雅、B站、小红书）涉及版权侵权。个人收听、私人云盘备份、合理引用片段（如书评视频）是安全的。
-
-**Q: 为什么 EPUB 解析后章节顺序不对？**
-
-A: 早期版本按 manifest 读取，可能无序。当前版本已改为按 **spine** 顺序读取，如果仍有问题请提 Issue。
+> RTF (Real-Time Factor) = Process Time / Audio Duration. Smaller is faster. This project achieves approximately **40~60x real-time speed** at 24 concurrency.
 
 ---
 
-## 版权与许可
+## FAQ
 
-本项目采用 [MIT License](LICENSE)。
+**Q: Why do some chunks return "TTS returned empty audio"?**
 
-**使用本项目生成的音频，请遵守以下原则：**
-- 仅用于个人学习、研究、收听
-- 不得将完整有声书上传至公开平台
-- 尊重原作者版权，支持正版书籍
+A: This is caused by MiMo TTS RPM limit (100 RPM). The system will automatically retry, and attempt 2 or 3 usually succeeds. If it occurs frequently, lower `TTS_CONCURRENCY` to 20.
+
+**Q: Can I use other TTS engines?**
+
+A: Currently, it is deeply integrated with MiMo's OpenAI-compatible API. To integrate others (e.g., Azure TTS, Edge TTS), modify the `_synthesize_single` function in `synthesizer.py`.
+
+**Q: Which languages are supported?**
+
+A: Currently optimized for Chinese and English. Automatic language detection is based on text sampling.
+
+**Q: Can generated audiobooks be uploaded to podcast platforms?**
+
+A: **Not recommended**. These are full readings of commercial publications. Uploading to public platforms (Himalaya, Bilibili, Red, etc.) may involve copyright infringement. Personal listening, private cloud backup, or fair use of snippets are safe.
+
+**Q: Why is the chapter order wrong after EPUB parsing?**
+
+A: Early versions read via manifest, which might be unordered. The current version reads via the **spine**, which should ensure correct sequence.
 
 ---
 
-## 致谢
+## Technical Documentation
 
-- [MiMo](https://www.xiaomimimo.com/) 提供 TTS 与 LLM API
-  - [MiMo TTS v2.5 发布说明](https://platform.xiaomimimo.com/docs/zh-CN/news/v2.5-tts-release)
-  - [语音合成使用指南](https://platform.xiaomimimo.com/docs/zh-CN/usage-guide/speech-synthesis-v2.5)
-  - [计费与价格说明](https://platform.xiaomimimo.com/docs/zh-CN/pricing)
-- [OpenAI Python SDK](https://github.com/openai/openai-python) 提供异步客户端
-- [pydub](https://github.com/jiaaro/pydub) 与 [mutagen](https://mutagen.readthedocs.io/) 处理音频
+For in-depth details on voice design, VoiceDesign model integration, and language detection, please refer to:
+- [VoiceDesign Integration Specification](docs/superpowers/specs/2026-05-03-voice-design-integration.md)
+
+---
+
+## License & Copyright
+
+This project is licensed under the [MIT License](LICENSE).
+
+**When using audio generated by this project, please adhere to the following:**
+- Use for personal learning, research, and listening only.
+- Do not upload full audiobooks to public platforms.
+- Respect original authors' copyright and support legal copies.
+
+---
+
+## Acknowledgments
+
+- [MiMo](https://www.xiaomimimo.com/) for providing TTS and LLM APIs
+  - [MiMo TTS v2.5 Release Notes](https://platform.xiaomimimo.com/docs/zh-CN/news/v2.5-tts-release)
+  - [Speech Synthesis Guide](https://platform.xiaomimimo.com/docs/zh-CN/usage-guide/speech-synthesis-v2.5)
+  - [Pricing](https://platform.xiaomimimo.com/docs/zh-CN/pricing)
+- [OpenAI Python SDK](https://github.com/openai/openai-python) for the asynchronous client
+- [pydub](https://github.com/jiaaro/pydub) and [mutagen](https://mutagen.readthedocs.io/) for audio processing
