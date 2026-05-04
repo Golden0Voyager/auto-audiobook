@@ -16,7 +16,9 @@ output/*
 !output/.gitkeep
 
 # === 缓存 ===
-output/.cache/
+output/.tts_cache/
+.pytest_cache/
+.mypy_cache/
 
 # === 敏感文件 ===
 .env
@@ -41,6 +43,9 @@ Thumbs.db
 
 # === RTK ===
 .rtk/
+
+# === 项目内部文档 ===
+CLAUDE.md
 
 # === 媒体文件（可选，如果不想跟踪生成的音频）===
 # *.mp3
