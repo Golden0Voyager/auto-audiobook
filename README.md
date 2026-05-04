@@ -1,7 +1,9 @@
 >
-> 感谢 [Xiaomi MiMo](https://www.xiaomimimo.com/) Orbit「百万亿 Token 创造者激励计划」赠送的一个月 Token Pro 套餐。本项目使用的 MiMo-V2.5-TTS 模型目前处于**限时免费调用**阶段，虽然生成效果并非业界最顶尖，但量大管饱、非常慷慨。
+> 首先感谢 [Xiaomi MiMo](https://www.xiaomimimo.com/) Orbit「百万亿 Token 创造者激励计划」赠送的一个月 Token Pro 套餐。本项目使用的 MiMo-V2.5-TTS 模型目前处于**限时免费调用**阶段，虽然生成效果并非业界最顶尖，但量大管饱、非常慷慨。
 >
 > 我在使用过程中发现，长文本朗读时模型的语音一致性会随上下文长度衰减（中后段语速变快、咬字模糊），因此在工程上做了大量优化（动态分块、风格保鲜、并发控制等），最终效果令人满意。开源出来分享给有需要的人——我的初衷很简单：**给家里的老人制作有声书**。实测生成效率约为 **1:60**（1 秒处理时间生成 1 分钟音频），完全可以接受。
+>
+> 这个项目的基础框架是我用 MiMo-V2.5-Pro 花了半天时间手搓出来的，后续的优化和升级全程靠 **Kimi 2.6 for Coding** 的 vibe coding 能力完成。我不是专业开发者，只是五一假期在家玩票。不得不说，小米一个月 7 亿 Token 的额度虽然听起来很多，实际跑起来完全不够用——这才 3 天就已经烧了 40%（当然还有别的项目和工作在跑），希望小米未来真的考虑一下用量扩容的事儿。
 
 # Auto-Audiobook
 
@@ -257,5 +259,8 @@ A: 早期版本按 manifest 读取，可能无序。当前版本已改为按 **s
 ## 致谢
 
 - [MiMo](https://www.xiaomimimo.com/) 提供 TTS 与 LLM API
+  - [MiMo TTS v2.5 发布说明](https://platform.xiaomimimo.com/docs/zh-CN/news/v2.5-tts-release)
+  - [语音合成使用指南](https://platform.xiaomimimo.com/docs/zh-CN/usage-guide/speech-synthesis-v2.5)
+  - [计费与价格说明](https://platform.xiaomimimo.com/docs/zh-CN/pricing)
 - [OpenAI Python SDK](https://github.com/openai/openai-python) 提供异步客户端
 - [pydub](https://github.com/jiaaro/pydub) 与 [mutagen](https://mutagen.readthedocs.io/) 处理音频
