@@ -14,10 +14,14 @@ import pdfplumber
 from bs4 import BeautifulSoup
 from ebooklib import epub
 
-from config import CHUNK_MAX_CHARS
+from config import CHUNK_HARD_LIMIT, CHUNK_MAX_CHARS
 from models import BookData, Chapter
 
 logger = logging.getLogger(__name__)
+
+# ── 预编译正则（O(1) 匹配）────────────────────────────────────────────
+_PARA_BOUNDARY_RE = re.compile(r"\n\s*\n")
+_SENTENCE_BOUNDARY_RE = re.compile(r"[。！？.!?]")
 
 
 def parse_epub(file_path: Path) -> BookData:
@@ -139,55 +143,82 @@ def convert_mobi_to_epub(mobi_path: Path) -> Path:
 
 
 def chunk_text(text: str, max_chars: int = CHUNK_MAX_CHARS) -> list[str]:
-    """按句号/段落断句，控制单块 ≤ max_chars 字。"""
-    paragraphs = re.split(r"\n\s*\n", text)
-    chunks: list[str] = []
-    buffer = ""
+    r"""滑动窗口 + 自然边界分块。单块优先 ≤ max_chars，绝对不超过 CHUNK_HARD_LIMIT。
 
-    for para in paragraphs:
-        para = para.strip()
-        if not para:
+    策略：
+    1. 在 max_chars 窗口内从后往前找段落边界 (\n\s*\n) — 最高优先级
+    2. 在 max_chars 窗口内从后往前找句子边界 (。！？.!?) — 次优先级
+    3. max_chars 内无边界时，向后扩展到 CHUNK_HARD_LIMIT 找最近边界
+    4. 900 字内仍无边界，硬切在 CHUNK_HARD_LIMIT（极端情况兜底）
+    """
+    if not text:
+        return []
+
+    soft = max_chars
+    hard = CHUNK_HARD_LIMIT
+    chunks: list[str] = []
+    pos = 0
+    n = len(text)
+
+    while pos < n:
+        remaining = n - pos
+        if remaining <= soft:
+            chunk = text[pos:n].strip()
+            if chunk:
+                chunks.append(chunk)
+            break
+
+        # 一次扫描 [pos, pos+hard) 的范围
+        big_window = text[pos : pos + min(hard, remaining)]
+        para_matches = list(_PARA_BOUNDARY_RE.finditer(big_window))
+        sent_matches = list(_SENTENCE_BOUNDARY_RE.finditer(big_window))
+
+        # 策略1：在 soft limit 内找段落边界，取最后一个
+        soft_para = [m for m in para_matches if m.end() <= soft]
+        if soft_para:
+            split_at = pos + soft_para[-1].end()
+            chunks.append(text[pos:split_at].strip())
+            pos = split_at
             continue
 
-        if len(buffer) + len(para) + 1 <= max_chars:
-            buffer = f"{buffer}\n{para}" if buffer else para
-        else:
-            if buffer:
-                chunks.append(buffer.strip())
-            if len(para) > max_chars:
-                sub_chunks = _split_long_paragraph(para, max_chars)
-                chunks.extend(sub_chunks)
-            else:
-                buffer = para
-                continue
-            buffer = ""
-
-    if buffer.strip():
-        chunks.append(buffer.strip())
-
-    return chunks
-
-
-def _split_long_paragraph(text: str, max_chars: int) -> list[str]:
-    """将超长段落按句子边界拆分。"""
-    sentences = re.split(r"(?<=[。！？.!?])", text)
-    chunks: list[str] = []
-    buffer = ""
-
-    for sent in sentences:
-        if not sent.strip():
+        # 策略2：在 soft limit 内找句子边界，取最后一个
+        soft_sent = [m for m in sent_matches if m.end() <= soft]
+        if soft_sent:
+            sent_match = soft_sent[-1]
+            # 防御：若最后一个边界产生的 chunk 太短（< 30% soft），尝试倒数第二个
+            if sent_match.end() < soft * 0.3 and len(soft_sent) >= 2:
+                second_last = soft_sent[-2]
+                if second_last.end() >= soft * 0.5:
+                    sent_match = second_last
+            split_at = pos + sent_match.end()
+            chunks.append(text[pos:split_at].strip())
+            pos = split_at
             continue
-        if len(buffer) + len(sent) <= max_chars:
-            buffer += sent
-        else:
-            if buffer:
-                chunks.append(buffer.strip())
-            buffer = sent
 
-    if buffer.strip():
-        chunks.append(buffer.strip())
+        # 策略3：soft limit 内无边界 —— 在 soft~hard 之间找最近边界
+        hard_para = [m for m in para_matches if soft < m.end() <= hard]
+        hard_sent = [m for m in sent_matches if soft < m.end() <= hard]
 
-    return chunks
+        best_boundary = None
+        if hard_para:
+            best_boundary = hard_para[0].end()
+        if hard_sent:
+            sent_pos = hard_sent[0].end()
+            if best_boundary is None or sent_pos < best_boundary:
+                best_boundary = sent_pos
+
+        if best_boundary:
+            split_at = pos + best_boundary
+            chunks.append(text[pos:split_at].strip())
+            pos = split_at
+            continue
+
+        # 策略4：900 字内真的没有任何边界（极端情况）
+        split_at = pos + min(hard, remaining)
+        chunks.append(text[pos:split_at].strip())
+        pos = split_at
+
+    return [c for c in chunks if c]
 
 
 def _strip_html(html: str) -> str:
