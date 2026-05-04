@@ -86,10 +86,11 @@ CHAPTER_SILENCE_MS: int = 1500
 
 # === 并发控制 ===
 LLM_CONCURRENCY: int = int(os.environ.get("LLM_CONCURRENCY", "5"))
-TTS_CONCURRENCY: int = int(os.environ.get("TTS_CONCURRENCY", "25"))
+TTS_CONCURRENCY: int = int(os.environ.get("TTS_CONCURRENCY", "24"))
 
 # === 文本分块 ===
-CHUNK_MAX_CHARS: int = 1200  # 标准 TTS 模型支持长文本
+CHUNK_MAX_CHARS: int = 600  # 软限制：优先在此附近找自然边界切分
+CHUNK_HARD_LIMIT: int = 900  # 硬限制：任何 chunk 不允许超过此长度
 
 # === 重试 ===
 MAX_RETRIES: int = 3
