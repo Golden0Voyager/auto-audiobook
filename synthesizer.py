@@ -170,7 +170,7 @@ async def _synthesize_single(
     cache_path = TTS_CACHE_DIR / f"{chunk_hash}.wav"
 
     if cache_path.exists():
-        logger.info(f"  TTS 缓存命中: {chunk_hash[:8]}")
+        # 不打印逐块日志：rich.Progress 已显示缓存命中数，logger 写 stderr 会打断进度条
         return cache_path.read_bytes()
 
     async with semaphore:
