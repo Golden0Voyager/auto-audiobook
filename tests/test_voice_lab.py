@@ -4,6 +4,7 @@ import random
 import pytest
 
 from models import BookData, Chapter
+import voice_lab as vl_module
 from voice_lab import _sample_preview_text, _truncate_at_sentence
 
 
@@ -88,3 +89,67 @@ def test_sample_preview_text_returns_empty_when_chunks_all_empty(monkeypatch):
     monkeypatch.setattr(random, "choice", lambda seq: seq[0])
     out = _sample_preview_text(book, target_chars=200)
     assert out == ""
+
+
+def test_select_combos_default_includes_all_voices_with_default_style(monkeypatch):
+    """默认勾选 = 当前语言下所有音色 × 'default' 风格。"""
+    captured = {}
+
+    class _FakeCheckbox:
+        def __init__(self, _msg, choices, **kw):
+            captured["choices"] = choices
+
+        def ask(self):
+            return [c.value for c in captured["choices"] if c.checked]
+
+    class _FakeConfirm:
+        def __init__(self, _msg, default=True):
+            self.default = default
+
+        def ask(self):
+            return True
+
+    monkeypatch.setattr(vl_module.questionary, "checkbox", _FakeCheckbox)
+    monkeypatch.setattr(vl_module.questionary, "confirm", _FakeConfirm)
+
+    combos = vl_module._select_combos("zh")
+
+    assert len(combos) == 4
+    assert all(style == "default" for _, style in combos)
+    voice_names = {v for v, _ in combos}
+    assert voice_names == {"茉莉", "白桦", "苏打", "冰糖"}
+
+
+def test_select_combos_warns_when_over_twenty(monkeypatch):
+    """超 20 个组合时应弹 confirm。"""
+    confirm_calls = []
+
+    class _FakeCheckbox:
+        def __init__(self, _msg, choices, **kw):
+            self._choices = choices
+
+        def ask(self):
+            return [c.value for c in self._choices]
+
+    class _FakeConfirm:
+        def __init__(self, _msg, default=True):
+            confirm_calls.append(_msg)
+
+        def ask(self):
+            return True
+
+    monkeypatch.setattr(vl_module.questionary, "checkbox", _FakeCheckbox)
+    monkeypatch.setattr(vl_module.questionary, "confirm", _FakeConfirm)
+
+    import config
+    original = list(config.TTS_VOICE_OPTIONS["zh"])
+    monkeypatch.setattr(
+        config,
+        "TTS_VOICE_OPTIONS",
+        {**config.TTS_VOICE_OPTIONS,
+         "zh": original + [{"name": "测试音", "gender": "female", "label": "test"}]},
+    )
+
+    combos = vl_module._select_combos("zh")
+    assert len(combos) == 25
+    assert any("勾选" in msg or "组合" in msg for msg in confirm_calls)
