@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import re
 import subprocess
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -18,6 +17,8 @@ from config import CHUNK_HARD_LIMIT, CHUNK_MAX_CHARS
 from models import BookData, Chapter
 
 logger = logging.getLogger(__name__)
+
+KINDLE_EXTENSIONS = {".mobi", ".azw", ".azw3", ".kf8"}
 
 # ── 预编译正则（O(1) 匹配）────────────────────────────────────────────
 _PARA_BOUNDARY_RE = re.compile(r"\n\s*\n")
@@ -117,7 +118,7 @@ def parse_pdf(file_path: Path) -> BookData:
 def parse_file(file_path: Path) -> BookData:
     """解析 EPUB、MOBI 或 PDF 文件。"""
     suffix = file_path.suffix.lower()
-    if suffix == ".mobi":
+    if suffix in KINDLE_EXTENSIONS:
         epub_path = convert_mobi_to_epub(file_path)
         return parse_epub(epub_path)
     if suffix == ".pdf":
@@ -128,16 +129,26 @@ def parse_file(file_path: Path) -> BookData:
 def convert_mobi_to_epub(mobi_path: Path) -> Path:
     """调用 calibre ebook-convert 将 MOBI 转为 EPUB。"""
     epub_path = mobi_path.with_suffix(".epub")
-    if epub_path.exists():
+    if epub_path.exists() and epub_path.stat().st_mtime >= mobi_path.stat().st_mtime:
         return epub_path
 
-    result = subprocess.run(
-        ["ebook-convert", str(mobi_path), str(epub_path)],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["ebook-convert", str(mobi_path), str(epub_path)],
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "未找到 `ebook-convert` 命令。MOBI/AZW 解析依赖 Calibre。"
+            "请先安装 Calibre 并确保 `ebook-convert` 在 PATH 中。"
+        ) from exc
+
     if result.returncode != 0:
-        raise RuntimeError(f"MOBI 转换失败: {result.stderr}")
+        stderr = (result.stderr or "").strip()
+        stdout = (result.stdout or "").strip()
+        detail = stderr or stdout or "未知错误"
+        raise RuntimeError(f"MOBI/AZW 转换失败: {detail}")
 
     return epub_path
 
