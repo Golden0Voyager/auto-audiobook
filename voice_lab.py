@@ -322,23 +322,45 @@ async def _interactive_compare(
                 console.print(f"[green]候选已切换到 #{n + 1}[/green]")
 
 
-async def run_voice_lab(file_path: Path, language: str) -> tuple[str, str]:
+def prepare_preview_text(file_path: Path, language: str) -> str | None:
+    """解析书籍并抽取试听文本。失败返回 None，调用方应回退默认配置。
+
+    抽出此函数后，main.py 可在试听→不满意→重进对比室的循环中复用同一段文本，
+    避免每次重试都重新解析整本书 + 重新采样。
+    """
+    try:
+        book = parse_file(file_path)
+    except Exception as e:
+        console.print(f"[yellow]试听准备失败: {e}[/yellow]")
+        return None
+
+    text = _sample_preview_text(book, target_chars=200)
+    if not text:
+        console.print("[yellow]无法抽取试听文本[/yellow]")
+        return None
+    return text
+
+
+async def run_voice_lab(
+    file_path: Path,
+    language: str,
+    preview_text: str | None = None,
+) -> tuple[str, str]:
     """试听对比室入口。返回最终选定的 (voice, style)。
+
+    Args:
+        file_path: 书籍路径，用于解析（仅当 preview_text 为 None 时使用）
+        language: 'zh' / 'en'
+        preview_text: 可选，已抽取好的试听文本。提供则跳过 parse+sample。
 
     任意失败均回退到 (默认音色, 'default')，不阻塞主流程。
     """
     default_voice = config.TTS_VOICES.get(language, "茉莉")
     default_fallback = (default_voice, "default")
 
-    try:
-        book = parse_file(file_path)
-    except Exception as e:
-        console.print(f"[yellow]试听准备失败: {e}，使用默认配置继续[/yellow]")
-        return default_fallback
-
-    text = _sample_preview_text(book, target_chars=200)
+    text = preview_text if preview_text is not None else prepare_preview_text(file_path, language)
     if not text:
-        console.print("[yellow]无法抽取试听文本，使用默认配置继续[/yellow]")
+        console.print("[yellow]使用默认配置继续[/yellow]")
         return default_fallback
 
     preview_clip = text[:80] + "…" if len(text) > 80 else text

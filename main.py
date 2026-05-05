@@ -484,14 +484,22 @@ def interactive_mode() -> None:
         language = _confirm_language(selected, style)
 
         import voice_lab
-        console.print("\n[bold]进入试听对比室…[/bold]")
-        voice, style_choice = asyncio.run(voice_lab.run_voice_lab(selected[0], language))
-        _apply_processing_config(language, style_choice, voice)
+        # 提前抽一次试听文本：用户重选音色/风格时复用同一段文本，
+        # 既保证 A/B 对比公平，也让相同 (voice, style) 直接命中 TTS 缓存。
+        preview_text = voice_lab.prepare_preview_text(selected[0], language)
 
-        _show_pending_summary(selected, language, style_choice, voice)
+        # 试听→确认循环：n 不满意则重进试听对比室，保留书籍/语言/试听文本
+        while True:
+            console.print("\n[bold]进入试听对比室…[/bold]")
+            voice, style_choice = asyncio.run(
+                voice_lab.run_voice_lab(selected[0], language, preview_text=preview_text)
+            )
+            _apply_processing_config(language, style_choice, voice)
 
-        if not questionary.confirm(t("confirm_process"), default=True).ask():
-            continue
+            _show_pending_summary(selected, language, style_choice, voice)
+
+            if questionary.confirm(t("confirm_process"), default=True).ask():
+                break
 
         results = asyncio.run(batch_process(selected))
         print_batch_summary(results)
