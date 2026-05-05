@@ -6,19 +6,25 @@ import logging
 import platform
 import random
 import re
+import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 import questionary
+from rich.console import Console
+from rich.table import Table
 
 import config
 from assembler import _concat_wav_chunks, export_to_mp3
 from models import BookData
+from parser import parse_file
 from rule_cleaner import clean_chapters as rule_clean
 from synthesizer import synthesize_chapters
 
 logger = logging.getLogger(__name__)
+console = Console()
 
 
 def _play_mp3(path: Path) -> None:
@@ -221,6 +227,140 @@ async def _synthesize_previews(
             )
         )
     return await asyncio.gather(*tasks)
+
+
+def _render_table(items: list[PreviewItem], current: int | None) -> None:
+    """打印对比室表格。current 为当前候选的索引（0-based），可为 None。"""
+    table = Table(
+        title="试听对比室",
+        border_style="cyan",
+        show_header=True,
+        header_style="bold magenta",
+    )
+    table.add_column("#", style="dim", width=3)
+    table.add_column("音色")
+    table.add_column("风格")
+    table.add_column("状态")
+    table.add_column("时长")
+    table.add_column("候选", justify="center")
+
+    for idx, it in enumerate(items):
+        if it.error:
+            status = f"[red]✗ {it.error[:20]}[/red]"
+            duration = "-"
+        else:
+            status = "[green]✓ 已生成[/green]"
+            duration = f"{it.duration_sec:.1f}s"
+        marker = "[yellow]★[/yellow]" if current == idx else ""
+        table.add_row(
+            str(idx + 1), it.voice, it.style_label, status, duration, marker,
+        )
+
+    console.print(table)
+
+
+async def _interactive_compare(
+    items: list[PreviewItem], language: str,
+) -> tuple[str, str]:
+    """菜单循环：选听 / 设候选 / 确认。返回 (voice, style)。
+
+    退出（Ctrl+C / 取消）会抛 KeyboardInterrupt，由调用方决定回退。
+    """
+    current = next(
+        (i for i, it in enumerate(items) if it.error is None),
+        None,
+    )
+    if current is None:
+        console.print("[yellow]全部试听合成失败，使用默认配置继续[/yellow]")
+        return (
+            config.TTS_VOICES.get(language, "茉莉"),
+            "default",
+        )
+
+    while True:
+        _render_table(items, current)
+        cur_item = items[current]
+        console.print(
+            f"[cyan]当前候选：#{current + 1} {cur_item.voice} × {cur_item.style_label}[/cyan]"
+        )
+
+        action = await questionary.select(
+            "下一步操作：",
+            choices=[
+                questionary.Choice(title="▶ 试听某个编号", value="play"),
+                questionary.Choice(title="★ 设某个编号为候选", value="pick"),
+                questionary.Choice(title="✓ 确认当前候选并继续", value="confirm"),
+                questionary.Choice(title="✗ 取消（用默认音色/风格）", value="cancel"),
+            ],
+        ).unsafe_ask_async()
+
+        if action == "confirm":
+            return (cur_item.voice, cur_item.style)
+
+        if action == "cancel":
+            return (
+                config.TTS_VOICES.get(language, "茉莉"),
+                "default",
+            )
+
+        if action in ("play", "pick"):
+            playable_indices = [
+                str(i + 1) for i, it in enumerate(items) if it.error is None
+            ]
+            num_str = await questionary.select(
+                "选择编号:",
+                choices=playable_indices,
+            ).unsafe_ask_async()
+            n = int(num_str) - 1
+            if action == "play":
+                console.print(
+                    f"[cyan]播放 #{n + 1} ({items[n].duration_sec:.1f}s)...[/cyan]"
+                )
+                _play_mp3(items[n].mp3_path)
+            else:  # pick
+                current = n
+                console.print(f"[green]候选已切换到 #{n + 1}[/green]")
+
+
+async def run_voice_lab(file_path: Path, language: str) -> tuple[str, str]:
+    """试听对比室入口。返回最终选定的 (voice, style)。
+
+    任意失败均回退到 (默认音色, 'default')，不阻塞主流程。
+    """
+    default_voice = config.TTS_VOICES.get(language, "茉莉")
+    default_fallback = (default_voice, "default")
+
+    try:
+        book = parse_file(file_path)
+    except Exception as e:
+        console.print(f"[yellow]试听准备失败: {e}，使用默认配置继续[/yellow]")
+        return default_fallback
+
+    text = _sample_preview_text(book, target_chars=200)
+    if not text:
+        console.print("[yellow]无法抽取试听文本，使用默认配置继续[/yellow]")
+        return default_fallback
+
+    preview_clip = text[:80] + "…" if len(text) > 80 else text
+    console.print(f"[dim]试听文本: {preview_clip}[/dim]")
+
+    combos = _select_combos(language)
+    if not combos:
+        console.print("[yellow]未勾选任何组合，使用默认配置继续[/yellow]")
+        return default_fallback
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="voice_lab_"))
+    try:
+        console.print(f"[cyan]开始合成 {len(combos)} 个试听片段…[/cyan]")
+        items = await _synthesize_previews(text, language, combos, tmp_dir)
+        try:
+            return await _interactive_compare(items, language)
+        except KeyboardInterrupt:
+            console.print("[yellow]已取消试听，使用默认配置继续[/yellow]")
+            return default_fallback
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
 
 
 
