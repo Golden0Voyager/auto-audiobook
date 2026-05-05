@@ -1,13 +1,32 @@
 """试听对比室 — 批量合成多组合，让用户横向比较音色与风格。"""
 from __future__ import annotations
 
+import asyncio
+import logging
 import random
 import re
+from dataclasses import dataclass
+from pathlib import Path
 
 import questionary
 
 import config
+from assembler import _concat_wav_chunks, export_to_mp3
 from models import BookData
+from rule_cleaner import clean_chapters as rule_clean
+from synthesizer import synthesize_chapters
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PreviewItem:
+    voice: str
+    style: str
+    style_label: str
+    mp3_path: Path | None
+    error: str | None
+    duration_sec: float
 
 _SENTENCE_END = re.compile(r'[。！？!?\.](?=[^"」』]|$)')
 
@@ -119,5 +138,71 @@ def _select_combos(language: str) -> list[tuple[str, str]]:
             return []
 
     return list(selected)
+
+
+async def _synthesize_one(
+    text: str,
+    language: str,
+    voice: str,
+    style_key: str,
+    style_label: str,
+    out_path: Path,
+    lock: asyncio.Lock,
+) -> PreviewItem:
+    """合成一个组合 → 临时 mp3。失败时返回带 error 的 PreviewItem。"""
+    cleaned = rule_clean([("preview", [text])])
+    async with lock:
+        original_voice = config.TTS_VOICES.get(language)
+        original_styles = config.TTS_STYLES
+        config.TTS_VOICES[language] = voice
+        config.TTS_STYLES = config.TTS_STYLE_PRESETS[style_key]
+        try:
+            try:
+                chapter_audios, _ = await synthesize_chapters(cleaned, language=language)
+            except Exception as e:
+                return PreviewItem(
+                    voice=voice, style=style_key, style_label=style_label,
+                    mp3_path=None, error=f"{type(e).__name__}: {e}", duration_sec=0.0,
+                )
+        finally:
+            if original_voice is not None:
+                config.TTS_VOICES[language] = original_voice
+            config.TTS_STYLES = original_styles
+
+    if not chapter_audios or not chapter_audios[0].audio_chunks:
+        return PreviewItem(
+            voice=voice, style=style_key, style_label=style_label,
+            mp3_path=None, error="empty audio", duration_sec=0.0,
+        )
+
+    combined = _concat_wav_chunks(chapter_audios[0].audio_chunks)
+    duration = len(combined) / 1000.0
+    export_to_mp3(combined, out_path)
+    return PreviewItem(
+        voice=voice, style=style_key, style_label=style_label,
+        mp3_path=out_path, error=None, duration_sec=duration,
+    )
+
+
+async def _synthesize_previews(
+    text: str,
+    language: str,
+    combos: list[tuple[str, str]],
+    tmp_dir: Path,
+) -> list[PreviewItem]:
+    """合成所有组合（每个 synthesize_chapters 内部仍并发，外部用 lock 串行化避免 config 写争抢）。"""
+    labels = _style_labels(language)
+    lock = asyncio.Lock()
+    tasks = []
+    for voice, style_key in combos:
+        out_path = tmp_dir / f"preview_{voice}_{style_key}.mp3"
+        tasks.append(
+            _synthesize_one(
+                text, language, voice, style_key,
+                labels.get(style_key, style_key), out_path, lock,
+            )
+        )
+    return await asyncio.gather(*tasks)
+
 
 

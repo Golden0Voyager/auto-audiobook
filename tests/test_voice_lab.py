@@ -153,3 +153,46 @@ def test_select_combos_warns_when_over_twenty(monkeypatch):
     combos = vl_module._select_combos("zh")
     assert len(combos) == 25
     assert any("勾选" in msg or "组合" in msg for msg in confirm_calls)
+
+
+def _minimal_wav_bytes() -> bytes:
+    """构造最小可解码的 WAV：标准头 + 几个采样点静音。"""
+    import io
+    import wave
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(22050)
+        w.writeframes(b"\x00\x00" * 100)
+    return buf.getvalue()
+
+
+async def test_synthesize_previews_partial_failure(monkeypatch, tmp_path):
+    """一个组合 raise，其他组合应正常返回。"""
+    from models import ChapterAudio
+    from voice_lab import _synthesize_previews
+
+    call_count = {"n": 0}
+
+    async def fake_synthesize_chapters(chapters, language="zh"):
+        call_count["n"] += 1
+        if call_count["n"] == 2:
+            raise RuntimeError("simulated TTS failure")
+        wav_bytes = _minimal_wav_bytes()
+        return [ChapterAudio(title=chapters[0].title, track_num=1, audio_chunks=[wav_bytes])], None
+
+    monkeypatch.setattr(vl_module, "synthesize_chapters", fake_synthesize_chapters)
+
+    combos = [("茉莉", "default"), ("白桦", "default"), ("苏打", "default")]
+    items = await _synthesize_previews("测试文本。", "zh", combos, tmp_path)
+
+    assert len(items) == 3
+    successes = [it for it in items if it.error is None]
+    failures = [it for it in items if it.error is not None]
+    assert len(successes) == 2
+    assert len(failures) == 1
+    assert failures[0].voice == "白桦"
+    assert "simulated" in failures[0].error
+    for it in successes:
+        assert it.mp3_path and it.mp3_path.exists()
