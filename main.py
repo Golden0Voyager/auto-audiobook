@@ -128,7 +128,7 @@ logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.ERROR)
 logging.getLogger("httpcore").setLevel(logging.ERROR)
 
-SUPPORTED_EXTENSIONS = {".epub", ".mobi", ".pdf"}
+SUPPORTED_EXTENSIONS = {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".kf8"}
 
 
 # ── Watchdog ──────────────────────────────────────────────────────────
@@ -245,9 +245,10 @@ def print_batch_summary(results: list[BookResult]) -> None:
 
 def _scan_input_dir(input_dir: Path) -> list[Path]:
     """扫描 input 目录，返回支持格式的文件列表（排序）。"""
-    files: list[Path] = []
-    for ext in SUPPORTED_EXTENSIONS:
-        files.extend(input_dir.glob(f"*{ext}"))
+    files = [
+        p for p in input_dir.iterdir()
+        if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
+    ]
     files.sort(key=lambda p: p.name)
     return files
 
