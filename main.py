@@ -5,10 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import platform
-import subprocess
 import sys
-import tempfile
 import time
 import traceback
 from dataclasses import dataclass
@@ -360,16 +357,6 @@ def _confirm_language(files: list[Path], style: questionary.Style) -> str:
         return lang_choice or "zh"
 
 
-def _select_style(style: questionary.Style) -> str:
-    """选择朗读风格。"""
-    style_label = questionary.select(
-        t("select_style"),
-        choices=[questionary.Choice(title=label, value=key) for key, label in STYLE_LABELS[UI_LANG].items()],
-        style=style,
-    ).ask()
-    return style_label or "default"
-
-
 def _pick_ui_language() -> str:
     """让用户选择界面语言。"""
     return questionary.select(
@@ -435,93 +422,12 @@ def _show_pending_summary(files: list[Path], language: str, style_choice: str, v
     )
 
 
-def _select_voice(style: questionary.Style, language: str) -> str:
-    """选择朗读者音色。"""
-    import config
-    options = config.TTS_VOICE_OPTIONS.get(language, config.TTS_VOICE_OPTIONS["zh"])
-    choices = [
-        questionary.Choice(
-            title=f"{opt['name']} ({opt['label']})",
-            value=opt["name"],
-        )
-        for opt in options
-    ]
-    voice = questionary.select(
-        "选择朗读者音色：" if UI_LANG == "zh" else "Select narrator voice:",
-        choices=choices,
-        style=style,
-    ).ask()
-    return voice or (options[0]["name"] if options else "茉莉")
-
-
 def _apply_processing_config(language: str, style_choice: str, voice: str) -> None:
     """把用户选择的语言、音色和风格写入运行时配置。"""
     import config
     config.TTS_VOICES[language] = voice
     config.TTS_STYLE = style_choice
     config.TTS_STYLES = TTS_STYLE_PRESETS[style_choice]
-
-
-def _play_mp3(path: Path) -> None:
-    """跨平台播放 MP3。Task 7/8 后改为直接从 voice_lab 导入；当前作为过渡 re-export。"""
-    from voice_lab import _play_mp3 as _impl
-    _impl(path)
-
-
-async def _preview_sample(
-    file_path: Path,
-    language: str,
-    style_choice: str,
-) -> bool:
-    """合成一小段试听样本并播放，返回用户是否满意。
-
-    流程：取第一章前 2 个 chunks -> 规则清洗 -> TTS 合成 -> 拼接导出临时 MP3 -> 播放 -> 删除
-    全程不写入正式输出目录，不影响增量处理。
-    """
-    from parser import parse_file
-    from rule_cleaner import clean_chapters as rule_clean
-    from synthesizer import synthesize_chapters
-    from assembler import _concat_wav_chunks, export_to_mp3
-
-    try:
-        book = parse_file(file_path)
-    except Exception as e:
-        console.print(f"[yellow]试听文件解析失败: {e}，跳过预览[/yellow]")
-        return True
-
-    if not book.chapters or not book.chapters[0].chunks:
-        console.print("[yellow]无法提取试听文本，跳过预览[/yellow]")
-        return True
-
-    # 取第一章前 2 个 chunks（约 6000 字以内，足够试听风格）
-    first_ch = book.chapters[0]
-    sample_chunks = first_ch.chunks[:2]
-    preview_text = sample_chunks[0][:120] + "..." if len(sample_chunks[0]) > 120 else sample_chunks[0]
-    console.print(f"[dim]试听文本: {preview_text}[/dim]")
-
-    # 快速规则清洗
-    cleaned = rule_clean([(first_ch.title, sample_chunks)])
-
-    # TTS 合成
-    chapter_audios, _ = await synthesize_chapters(cleaned, language=language)
-    if not chapter_audios or not chapter_audios[0].audio_chunks:
-        console.print("[yellow]试听合成失败，跳过预览[/yellow]")
-        return True
-
-    # 拼接并导出临时 MP3
-    combined = _concat_wav_chunks(chapter_audios[0].audio_chunks)
-    duration_sec = len(combined) / 1000
-
-    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-        tmp_path = Path(f.name)
-    export_to_mp3(combined, tmp_path)
-
-    console.print(f"[cyan]正在播放试听片段（约 {duration_sec:.1f} 秒）...[/cyan]")
-    _play_mp3(tmp_path)
-    tmp_path.unlink(missing_ok=True)
-
-    # 用户确认（在 async 上下文中使用 async API）
-    return await questionary.confirm("试听效果是否满意？满意则开始全量处理", default=True).unsafe_ask_async()
 
 
 def interactive_mode() -> None:
@@ -577,21 +483,12 @@ def interactive_mode() -> None:
         console.print(f"\n[bold]{t('confirm_language')}[/bold]")
         language = _confirm_language(selected, style)
 
-        console.print(f"\n[bold]选择朗读者音色[/bold]")
-        voice = _select_voice(style, language)
-
-        console.print(f"\n[bold]{t('select_style')}[/bold]")
-        style_choice = _select_style(style)
+        import voice_lab
+        console.print("\n[bold]进入试听对比室…[/bold]")
+        voice, style_choice = asyncio.run(voice_lab.run_voice_lab(selected[0], language))
         _apply_processing_config(language, style_choice, voice)
 
         _show_pending_summary(selected, language, style_choice, voice)
-
-        # 试听预览
-        console.print("\n[bold]试听预览...[/bold]")
-        preview_ok = asyncio.run(_preview_sample(selected[0], language, style_choice))
-        if not preview_ok:
-            console.print("[yellow]试听未通过，请重新选择风格或音色后重试[/yellow]")
-            continue
 
         if not questionary.confirm(t("confirm_process"), default=True).ask():
             continue
