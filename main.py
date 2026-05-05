@@ -20,7 +20,7 @@ from watchdog.observers import Observer
 
 from text_processor import detect_language, get_language_name
 
-from config import CLEAN_MODE, INPUT_DIR, TTS_STYLE_PRESETS
+from config import CLEAN_MODE, INPUT_DIR, OUTPUT_DIR, TTS_STYLE_PRESETS
 from pipeline import process_book
 from voice_profiles import display_voice_profiles
 
@@ -44,6 +44,7 @@ TRANSLATIONS = {
         "select_all": "[全选] 选择所有文件",
         "select_files": "扫描到 {count} 个文件，用空格勾选，回车确认:",
         "no_selection": "未选择任何文件",
+        "multi_lang_warning": "⚠️  本批次将共用同一语言/音色/风格设置；如需多语言混合处理，请分批选择",
         "confirm_language": "确认读本语言:",
         "sampling": "  采样 {count} 个章节，共 {chars} 字符",
         "sampling_failed": "  采样失败: {error}",
@@ -81,6 +82,7 @@ TRANSLATIONS = {
         "select_all": "[Select All] Choose all files",
         "select_files": "Found {count} files, use space to select, enter to confirm:",
         "no_selection": "No files selected",
+        "multi_lang_warning": "⚠️  This batch will share one language/voice/style. For mixed-language books, please process them in separate batches.",
         "confirm_language": "Confirm book language:",
         "sampling": "  Sampled {count} chapters, {chars} characters total",
         "sampling_failed": "  Sampling failed: {error}",
@@ -113,16 +115,26 @@ def t(key: str, **kwargs) -> str:
     return text.format(**kwargs) if kwargs else text
 
 
+# FileHandler 在 import 时打开文件，必须先确保 OUTPUT_DIR 存在
+# （init_dirs() 是延迟初始化，要等 main() 才执行，对 logging.basicConfig 太晚）
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# 模块级保留 handler 引用，方便交互模式动态降低控制台日志级别（文件日志保留完整 INFO）
+_console_log_handler = logging.StreamHandler()
+_file_log_handler = logging.FileHandler(OUTPUT_DIR / "batch_run.log", encoding="utf-8")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%H:%M:%S",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("/Users/hainingyu/Code/auto_audiobook/output/batch_run.log", encoding="utf-8"),
-    ],
+    handlers=[_console_log_handler, _file_log_handler],
 )
 logger = logging.getLogger(__name__)
+
+
+def _quiet_console_logging() -> None:
+    """交互模式下把控制台日志降到 WARNING，避免 INFO 日志与 rich 输出交错。"""
+    _console_log_handler.setLevel(logging.WARNING)
 
 # 抑制 httpx/httpcore 在事件循环关闭时的清理警告
 logging.getLogger("httpx").setLevel(logging.ERROR)
@@ -434,6 +446,8 @@ def _apply_processing_config(language: str, style_choice: str, voice: str) -> No
 def interactive_mode() -> None:
     """交互式终端界面。"""
     global UI_LANG
+    # 进入交互模式后，控制台只显示 WARNING+ 日志，避免与 rich 输出交错
+    _quiet_console_logging()
     UI_LANG = _pick_ui_language()
     style = _build_questionary_style()
 
@@ -480,6 +494,10 @@ def interactive_mode() -> None:
         if selected is None:
             console.print(f"[yellow]{t('no_selection')}[/yellow]")
             continue
+
+        # 多文件批处理时提醒：当前批次会共享单一语言/音色/风格
+        if len(selected) > 1:
+            console.print(f"[yellow]{t('multi_lang_warning')}[/yellow]")
 
         console.print(f"\n[bold]{t('confirm_language')}[/bold]")
         language = _confirm_language(selected, style)
