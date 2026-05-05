@@ -463,21 +463,9 @@ def _apply_processing_config(language: str, style_choice: str, voice: str) -> No
 
 
 def _play_mp3(path: Path) -> None:
-    """跨平台播放 MP3 文件。"""
-    system = platform.system()
-    cmd: list[str] = []
-    if system == "Darwin":
-        cmd = ["afplay", str(path)]
-    elif system == "Linux":
-        cmd = ["mpg123", "-q", str(path)]
-    elif system == "Windows":
-        cmd = ["start", str(path)]
-        subprocess.run(cmd, shell=True, check=False)
-        return
-    else:
-        logger.warning(f"暂不支持在当前系统播放音频: {system}")
-        return
-    subprocess.run(cmd, check=False)
+    """跨平台播放 MP3。Task 7/8 后改为直接从 voice_lab 导入；当前作为过渡 re-export。"""
+    from voice_lab import _play_mp3 as _impl
+    _impl(path)
 
 
 async def _preview_sample(

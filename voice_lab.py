@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import platform
 import random
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,6 +19,22 @@ from rule_cleaner import clean_chapters as rule_clean
 from synthesizer import synthesize_chapters
 
 logger = logging.getLogger(__name__)
+
+
+def _play_mp3(path: Path) -> None:
+    """跨平台播放 MP3 文件。播放器缺失时打印警告并返回。"""
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            subprocess.run(["afplay", str(path)], check=False)
+        elif system == "Linux":
+            subprocess.run(["mpg123", "-q", str(path)], check=False)
+        elif system == "Windows":
+            subprocess.run(["start", str(path)], shell=True, check=False)
+        else:
+            logger.warning(f"暂不支持在当前系统播放音频: {system}")
+    except FileNotFoundError as e:
+        logger.warning(f"播放器不可用 ({e}); 文件位于: {path}")
 
 
 @dataclass
