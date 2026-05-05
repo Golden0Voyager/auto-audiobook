@@ -107,13 +107,13 @@ def _sample_preview_text(book: Book, target_chars: int = 200) -> str:
     else:
         return ""
 
-    raw = chapter.chunks[0]
-    text = _truncate_at_sentence(raw, target_chars)
+    text = _truncate_at_sentence(chapter.chunks[0], target_chars)
 
-    # 不足 50 字则拼接同章节后续 chunks
-    while len(text) < 50 and len(chapter.chunks) > 1:
-        text += chapter.chunks[1][: target_chars - len(text)]
-        chapter.chunks = chapter.chunks[1:]
+    # 不足 50 字则拼接同章节后续 chunks（不修改原 Book 对象）
+    idx = 1
+    while len(text) < 50 and idx < len(chapter.chunks):
+        text += chapter.chunks[idx][: target_chars - len(text)]
+        idx += 1
     return text
 ```
 
@@ -211,7 +211,7 @@ async def run_voice_lab(file_path, language) -> tuple[str, str]:
 
 ## 测试
 
-新建 `tests/test_voice_lab.py`：
+项目当前无 `tests/` 目录，本次新建并初始化为 pytest 项目（`tests/__init__.py`、`tests/conftest.py` 留空即可，依赖已在 venv 中）。新建 `tests/test_voice_lab.py`：
 
 | 测试用例 | 类型 |
 |---|---|
@@ -238,6 +238,7 @@ async def run_voice_lab(file_path, language) -> tuple[str, str]:
 |---|---|
 | `voice_lab.py` | 新建（~200 行） |
 | `main.py` | 删除 `_preview_sample` / `_select_voice` / `_select_style`，替换 `interactive_mode` 中相应步骤（~30 行净减少） |
+| `tests/__init__.py` | 新建（空文件） |
 | `tests/test_voice_lab.py` | 新建（~100 行） |
 | `voice_preview.py` | **不动** |
 | `parser.py` / `cleaner.py` / `synthesizer.py` / `assembler.py` / `pipeline.py` | **不动** |
