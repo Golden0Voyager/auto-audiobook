@@ -1,7 +1,10 @@
 """试听对比室 — 批量合成多组合，让用户横向比较音色与风格。"""
 from __future__ import annotations
 
+import random
 import re
+
+from models import BookData
 
 _SENTENCE_END = re.compile(r'[。！？!?\.](?=[^"」』]|$)')
 
@@ -19,3 +22,39 @@ def _truncate_at_sentence(text: str, target: int) -> str:
     if cuts:
         return text[: cuts[0]]
     return text[:target]
+
+
+def _sample_preview_text(book: BookData, target_chars: int = 200) -> str:
+    """从书中智能抽取一段试听文本。
+
+    规则：
+    1. 过滤"目录式"章节（标题<=2字 或 章节总文本<=200字）
+    2. 全部被过滤则回退到原始章节列表
+    3. 随机选一章；最多重抽 3 次以避开 chunks 为空的章节
+    4. 取首个 chunk 在自然边界截断到 ~target_chars
+    5. 不足 50 字时,拼接同章后续 chunk（不修改原对象）
+    """
+    content_chapters = [
+        ch for ch in book.chapters
+        if len(ch.title) > 2 and sum(len(c) for c in ch.chunks) > 200
+    ]
+    if not content_chapters:
+        content_chapters = book.chapters
+
+    chapter = None
+    for _ in range(3):
+        candidate = random.choice(content_chapters)
+        if candidate.chunks:
+            chapter = candidate
+            break
+    if chapter is None:
+        return ""
+
+    text = _truncate_at_sentence(chapter.chunks[0], target_chars)
+
+    idx = 1
+    while len(text) < 50 and idx < len(chapter.chunks):
+        text += chapter.chunks[idx][: target_chars - len(text)]
+        idx += 1
+    return text
+
