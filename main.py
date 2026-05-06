@@ -131,14 +131,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 抑制 httpx/httpcore 在事件循环关闭时的清理警告
+logging.getLogger("httpx").setLevel(logging.ERROR)
+logging.getLogger("httpcore").setLevel(logging.ERROR)
+
 
 def _quiet_console_logging() -> None:
     """交互模式下把控制台日志降到 WARNING，避免 INFO 日志与 rich 输出交错。"""
     _console_log_handler.setLevel(logging.WARNING)
 
-# 抑制 httpx/httpcore 在事件循环关闭时的清理警告
-logging.getLogger("httpx").setLevel(logging.ERROR)
-logging.getLogger("httpcore").setLevel(logging.ERROR)
 
 SUPPORTED_EXTENSIONS = {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".kf8"}
 
