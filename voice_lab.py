@@ -126,11 +126,14 @@ def _style_labels(language: str) -> dict[str, str]:
     return _STYLE_LABELS_EN if language == "en" else _STYLE_LABELS_ZH
 
 
-def _select_combos(language: str) -> list[tuple[str, str]]:
+async def _select_combos(language: str) -> list[tuple[str, str]]:
     """让用户勾选 (voice, style) 组合。返回选定的列表。
 
     默认勾选：当前语言下所有音色 × 'default' 风格。
     超 20 个时弹 confirm 防误操作（软提示，不强阻断）。
+
+    注：必须用 unsafe_ask_async — 本函数运行在 run_voice_lab 的事件循环里，
+    若改回 .ask() 会触发嵌套 asyncio.run() RuntimeError。
     """
     voices = config.TTS_VOICE_OPTIONS.get(language, config.TTS_VOICE_OPTIONS["zh"])
     styles = _style_labels(language)
@@ -148,16 +151,16 @@ def _select_combos(language: str) -> list[tuple[str, str]]:
                 )
             )
 
-    selected = questionary.checkbox(
+    selected = await questionary.checkbox(
         "勾选要试听的 (音色 × 风格) 组合（空格选/取消，回车确认）：",
         choices=choices,
-    ).ask() or []
+    ).unsafe_ask_async() or []
 
     if len(selected) > 20:
-        ok = questionary.confirm(
+        ok = await questionary.confirm(
             f"勾选 {len(selected)} 个组合，预计耗时 ~{len(selected) * 3} 秒，确认？",
             default=True,
-        ).ask()
+        ).unsafe_ask_async()
         if not ok:
             return []
 
@@ -366,7 +369,7 @@ async def run_voice_lab(
     preview_clip = text[:80] + "…" if len(text) > 80 else text
     console.print(f"[dim]试听文本: {preview_clip}[/dim]")
 
-    combos = _select_combos(language)
+    combos = await _select_combos(language)
     if not combos:
         console.print("[yellow]未勾选任何组合，使用默认配置继续[/yellow]")
         return default_fallback
