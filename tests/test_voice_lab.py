@@ -91,7 +91,7 @@ def test_sample_preview_text_returns_empty_when_chunks_all_empty(monkeypatch):
     assert out == ""
 
 
-def test_select_combos_default_includes_all_voices_with_default_style(monkeypatch):
+async def test_select_combos_default_includes_all_voices_with_default_style(monkeypatch):
     """默认勾选 = 当前语言下所有音色 × 'default' 风格。"""
     captured = {}
 
@@ -99,20 +99,20 @@ def test_select_combos_default_includes_all_voices_with_default_style(monkeypatc
         def __init__(self, _msg, choices, **kw):
             captured["choices"] = choices
 
-        def ask(self):
+        async def unsafe_ask_async(self):
             return [c.value for c in captured["choices"] if c.checked]
 
     class _FakeConfirm:
         def __init__(self, _msg, default=True):
             self.default = default
 
-        def ask(self):
+        async def unsafe_ask_async(self):
             return True
 
     monkeypatch.setattr(vl_module.questionary, "checkbox", _FakeCheckbox)
     monkeypatch.setattr(vl_module.questionary, "confirm", _FakeConfirm)
 
-    combos = vl_module._select_combos("zh")
+    combos = await vl_module._select_combos("zh")
 
     assert len(combos) == 4
     assert all(style == "default" for _, style in combos)
@@ -120,7 +120,7 @@ def test_select_combos_default_includes_all_voices_with_default_style(monkeypatc
     assert voice_names == {"茉莉", "白桦", "苏打", "冰糖"}
 
 
-def test_select_combos_warns_when_over_twenty(monkeypatch):
+async def test_select_combos_warns_when_over_twenty(monkeypatch):
     """超 20 个组合时应弹 confirm。"""
     confirm_calls = []
 
@@ -128,14 +128,14 @@ def test_select_combos_warns_when_over_twenty(monkeypatch):
         def __init__(self, _msg, choices, **kw):
             self._choices = choices
 
-        def ask(self):
+        async def unsafe_ask_async(self):
             return [c.value for c in self._choices]
 
     class _FakeConfirm:
         def __init__(self, _msg, default=True):
             confirm_calls.append(_msg)
 
-        def ask(self):
+        async def unsafe_ask_async(self):
             return True
 
     monkeypatch.setattr(vl_module.questionary, "checkbox", _FakeCheckbox)
@@ -150,7 +150,7 @@ def test_select_combos_warns_when_over_twenty(monkeypatch):
          "zh": original + [{"name": "测试音", "gender": "female", "label": "test"}]},
     )
 
-    combos = vl_module._select_combos("zh")
+    combos = await vl_module._select_combos("zh")
     assert len(combos) == 25
     assert any("勾选" in msg or "组合" in msg for msg in confirm_calls)
 
