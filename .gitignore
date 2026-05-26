@@ -50,3 +50,6 @@ CLAUDE.md
 # === 媒体文件（可选，如果不想跟踪生成的音频）===
 # *.mp3
 # *.wav
+# Skill-generated analysis artifacts
+.understand-anything/
+.codegraph/
