@@ -19,6 +19,8 @@ output/*
 output/.tts_cache/
 .pytest_cache/
 .mypy_cache/
+.coverage
+.coverage.*
 
 # === 敏感文件 ===
 .env
