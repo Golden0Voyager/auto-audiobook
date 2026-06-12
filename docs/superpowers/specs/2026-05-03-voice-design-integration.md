@@ -29,12 +29,12 @@
 ```
 auto_audiobook/
 ├── voice_profiles.py      # 音色库定义
-├── voice_selector.py      # 交互式选择器
+├── voice_lab.py           # 试听对比室（选音色 + 选风格 + 试听）
 ├── text_processor.py      # 新增语言检测
 ├── synthesizer.py         # 集成 VoiceDesign
 ├── pipeline.py            # 支持音色参数
 ├── main.py                # CLI 参数和交互界面
-└── config.py              # 模型配置
+└── config.py              # 模型配置 + STYLE_LABELS
 ```
 
 ## 使用方式
@@ -79,7 +79,7 @@ auto_audiobook/
 ## 已完成
 
 - [x] 音色库定义（voice_profiles.py）
-- [x] 交互式选择器（voice_selector.py）
+- [x] 试听对比室（voice_lab.py，取代 voice_selector.py）
 - [x] 语言检测功能（text_processor.py）
 - [x] VoiceDesign 模型集成（synthesizer.py）
 - [x] Pipeline 参数支持（pipeline.py）
