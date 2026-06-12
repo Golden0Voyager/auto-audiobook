@@ -2,15 +2,16 @@
 
 import asyncio
 import base64
+import os
 import sys
 from pathlib import Path
 
 from openai import AsyncOpenAI
 from voice_profiles import VOICE_PROFILES, CATEGORY_LABELS
 
-# API 配置
-API_KEY = "sk-cuv9q06gjejujnkmc5mdc6cyvphyn67wp74iflwq80uv8s7y"
-BASE_URL = "https://api.xiaomimimo.com/v1"
+# API 配置 — 优先从环境变量读取，避免硬编码凭据
+API_KEY: str = os.environ.get("XIAOMI_MIMO_API_KEY", "")
+BASE_URL: str = os.environ.get("XIAOMI_MIMO_BASE_URL", "https://api.xiaomimimo.com/v1")
 MODEL = "mimo-v2.5-tts-voicedesign"
 
 # 各场景专用测试文本
@@ -90,6 +91,12 @@ async def generate_sample(
 
 
 async def main():
+    if not API_KEY:
+        print("⚠️  未设置 XIAOMI_MIMO_API_KEY 环境变量")
+        print("   请在 .env 文件中配置或 export XIAOMI_MIMO_API_KEY=your_key")
+        print("   示例: XIAOMI_MIMO_API_KEY=sk-xxxxxxxxxxxxxxxx")
+        sys.exit(1)
+
     OUTPUT_DIR.mkdir(exist_ok=True)
     client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL)
 
