@@ -7,8 +7,7 @@ from pathlib import Path
 # 测试模块导入
 print("1. 测试模块导入...")
 try:
-    from voice_profiles import VOICE_PROFILES, CATEGORY_LABELS, get_voice_description, get_voice_names
-    from voice_selector import select_voice, display_voice_profiles
+    from voice_profiles import VOICE_PROFILES, CATEGORY_LABELS, get_voice_description, get_voice_names, display_voice_profiles
     from text_processor import detect_language, optimize_for_speech
     print("   ✅ 所有模块导入成功")
 except Exception as e:
