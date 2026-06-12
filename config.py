@@ -74,6 +74,24 @@ TTS_STYLE_PRESETS: dict[str, dict[str, str]] = {
     },
 }
 
+# 风格中文/英文标签（供交互界面显示）
+STYLE_LABELS: dict[str, dict[str, str]] = {
+    "zh": {
+        "default": "默认",
+        "news": "新闻",
+        "story": "故事",
+        "biography": "传记",
+        "nonfiction": "知识",
+    },
+    "en": {
+        "default": "Default",
+        "news": "News",
+        "story": "Story",
+        "biography": "Biography",
+        "nonfiction": "Non-fiction",
+    },
+}
+
 # 当前使用的风格
 TTS_STYLE: str = "default"
 TTS_STYLES: dict[str, str] = TTS_STYLE_PRESETS["default"]
