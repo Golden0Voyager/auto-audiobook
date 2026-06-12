@@ -146,9 +146,95 @@ class TestAssembler:
         result = _concat_wav_chunks([wav_bytes.getvalue()])
         assert len(result) == 1000
 
+    def test_concat_multiple_chunks(self):
+        """多段拼接应插入静音间隔。"""
+        silence = AudioSegment.silent(duration=500, frame_rate=44100)
+        wav_bytes = io.BytesIO()
+        silence.export(wav_bytes, format="wav")
+        chunk_bytes = wav_bytes.getvalue()
+
+        result = _concat_wav_chunks([chunk_bytes, chunk_bytes])
+        # 2 段 500ms 音频 + 1 段 1500ms 静音间隔 = 2500ms
+        assert len(result) == 2500
+
+    def test_concat_with_mixed_sample_rates(self):
+        """不同采样率的 chunk 应统一。"""
+        seg_44k = AudioSegment.silent(duration=500, frame_rate=44100)
+        seg_22k = AudioSegment.silent(duration=500, frame_rate=22050)
+        buf = io.BytesIO()
+        seg_44k.export(buf, format="wav")
+        buf2 = io.BytesIO()
+        seg_22k.export(buf2, format="wav")
+        result = _concat_wav_chunks([buf.getvalue(), buf2.getvalue()])
+        # 500 + 1500(间隔) + 500 = 2500
+        assert len(result) == 2500
+
+    def test_concat_ignores_empty_chunks(self):
+        """空的 chunk bytes 应被跳过。只剩一个有效段时不插静音。"""
+        seg = AudioSegment.silent(duration=500, frame_rate=44100)
+        buf = io.BytesIO()
+        seg.export(buf, format="wav")
+        result = _concat_wav_chunks([b"", buf.getvalue(), b""])
+        assert len(result) == 500  # 空段被跳过，只剩一段，不插静音
+
     def test_sanitize_filename(self):
         assert ":" not in _sanitize_filename("a:b")
         assert "?" not in _sanitize_filename("a?b")
+        assert "/" not in _sanitize_filename("a/b")
+        assert "\\" not in _sanitize_filename("a\\b")
+        assert "*" not in _sanitize_filename("a*b")
+
+    def test_export_to_mp3_sets_channels(self, monkeypatch, tmp_path):
+        """export_to_mp3 应设置声道数为 1。"""
+        from assembler import export_to_mp3
+
+        export_calls = []
+
+        class FakeSegment:
+            def set_channels(self, n):
+                export_calls.append(("set_channels", n))
+                return self
+
+            def export(self, path, **kw):
+                export_calls.append(("export", str(path), kw))
+
+        export_to_mp3(FakeSegment(), tmp_path / "test.mp3", bitrate="128k")
+        assert ("set_channels", 1) in export_calls
+        assert any(c[0] == "export" for c in export_calls)
+
+    def test_write_id3_tags(self, monkeypatch, tmp_path):
+        """write_id3_tags 应调用 add 4 次（TIT2/TPE1/TALB/TRCK）+ save 1 次。"""
+        from assembler import write_id3_tags
+
+        call_count = {"mp3": 0, "add_tags": 0, "add": 0, "save": 0}
+
+        class FakeTags:
+            def add(self, tag):
+                call_count["add"] += 1
+
+            def save(self, path):
+                call_count["save"] += 1
+
+        class FakeAudio:
+            tags = None
+
+            def __init__(self, _path):
+                call_count["mp3"] += 1
+
+            def add_tags(self):
+                call_count["add_tags"] += 1
+                self.tags = FakeTags()
+                return self.tags
+
+        monkeypatch.setattr("assembler.MP3", FakeAudio)
+
+        mp3_path = tmp_path / "test.mp3"
+        mp3_path.write_text("fake")
+        write_id3_tags(mp3_path, "Book", "Author", "Ch1", 1)
+
+        assert call_count["add"] == 4  # TIT2, TPE1, TALB, TRCK
+        assert call_count["save"] == 1
+        assert call_count["mp3"] >= 1
 
 
 class TestModels:

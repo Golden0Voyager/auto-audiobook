@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import random
+import shutil
 import sys
 import time
 import traceback
@@ -18,11 +20,14 @@ from rich.table import Table
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from text_processor import detect_language, get_language_name
-
-from config import CLEAN_MODE, INPUT_DIR, OUTPUT_DIR, TTS_STYLE_PRESETS
+import config
+from config import CLEAN_MODE, INPUT_DIR, OUTPUT_DIR, STYLE_LABELS, TTS_CACHE_DIR, TTS_STYLE_PRESETS, init_dirs
+from parser import parse_file
 from pipeline import process_book
+from text_processor import detect_language, get_language_name
 from voice_profiles import display_voice_profiles
+
+import voice_lab
 
 console = Console()
 
@@ -268,9 +273,6 @@ def _scan_input_dir(input_dir: Path) -> list[Path]:
 
 def _clean_cache() -> None:
     """清理 TTS 缓存。"""
-    import shutil
-    from config import TTS_CACHE_DIR
-
     if TTS_CACHE_DIR.exists():
         cache_files = list(TTS_CACHE_DIR.glob("*.wav"))
         if cache_files:
@@ -291,84 +293,52 @@ def _clean_cache() -> None:
         console.print(f"[yellow]{t('cache_not_found')}[/yellow]")
 
 
-STYLE_LABELS = {
-    "zh": {
-        "default": "默认（平静温暖）",
-        "news": "新闻播报（权威专业）",
-        "story": "故事叙述（富有感情）",
-        "biography": "传记叙述（客观平实）",
-        "nonfiction": "知识讲解（清晰逻辑）",
-    },
-    "en": {
-        "default": "Default (calm & warm)",
-        "news": "News (authoritative)",
-        "story": "Story (emotional)",
-        "biography": "Biography (objective)",
-        "nonfiction": "Non-fiction (clear logic)",
-    },
-}
-
-
-def _confirm_language(files: list[Path], style: questionary.Style) -> str:
-    """确认读本语言。随机采样 3 个非目录章节，每章前 600 字。"""
-    import random
-    from parser import parse_file
-
-    sample_text = ""
+def _sample_book_text(files: list[Path]) -> str:
+    """解析书籍首文件，随机采样 3 个非目录章节、每章前 600 字，用于语言检测。"""
     try:
         book = parse_file(files[0])
-
-        # 过滤掉目录章节（标题过短或内容过少的章节）
-        content_chapters = [
+        chapters = [
             ch for ch in book.chapters
             if len(ch.title) > 2 and sum(len(c) for c in ch.chunks) > 200
-        ]
+        ] or book.chapters
 
-        if not content_chapters:
-            content_chapters = book.chapters
-
-        # 随机采样 3 个章节
-        sample_count = min(3, len(content_chapters))
-        sampled = random.sample(content_chapters, sample_count)
-
-        # 每章取前 600 字
-        texts = []
-        for ch in sampled:
-            if ch.chunks:
-                texts.append(ch.chunks[0][:600])
-        sample_text = "\n".join(texts)
+        sample_count = min(3, len(chapters))
+        sampled = random.sample(chapters, sample_count)
+        sample_text = "\n".join(ch.chunks[0][:600] for ch in sampled if ch.chunks)
 
         console.print(f"[dim]{t('sampling', count=sample_count, chars=len(sample_text))}[/dim]")
-
+        return sample_text
     except Exception as e:
         console.print(f"[yellow]{t('sampling_failed', error=e)}[/yellow]")
+        return ""
 
-    # 自动检测语言
-    detected_lang, confidence = detect_language(sample_text)
+
+def _ask_language_selection(detected_lang: str, confidence: float, style: questionary.Style) -> str:
+    """显示检测结果，让用户确认或手动选择语言。"""
     lang_name = get_language_name(detected_lang)
 
     console.print(f"\n[bold]{t('lang_result')}[/bold]")
     console.print(f"  {t('lang_detected', lang=lang_name, confidence=f'{confidence:.0%}')}")
 
-    # 让用户确认
-    confirm = questionary.confirm(
-        t("lang_confirm", lang=lang_name),
-        default=True
-    ).ask()
-
-    if confirm:
+    if questionary.confirm(t("lang_confirm", lang=lang_name), default=True).ask():
         return detected_lang
-    else:
-        # 用户手动选择
-        lang_choice = questionary.select(
-            t("select_language"),
-            choices=[
-                questionary.Choice(title=t("chinese"), value="zh"),
-                questionary.Choice(title=t("english"), value="en"),
-            ],
-            style=style,
-        ).ask()
-        return lang_choice or "zh"
+
+    lang_choice = questionary.select(
+        t("select_language"),
+        choices=[
+            questionary.Choice(title=t("chinese"), value="zh"),
+            questionary.Choice(title=t("english"), value="en"),
+        ],
+        style=style,
+    ).ask()
+    return lang_choice or "zh"
+
+
+def _confirm_language(files: list[Path], style: questionary.Style) -> str:
+    """确认读本语言：采样文本 → 自动检测 → 用户确认/手动选择。"""
+    sample_text = _sample_book_text(files)
+    detected_lang, confidence = detect_language(sample_text)
+    return _ask_language_selection(detected_lang, confidence, style)
 
 
 def _pick_ui_language() -> str:
@@ -438,7 +408,6 @@ def _show_pending_summary(files: list[Path], language: str, style_choice: str, v
 
 def _apply_processing_config(language: str, style_choice: str, voice: str) -> None:
     """把用户选择的语言、音色和风格写入运行时配置。"""
-    import config
     config.TTS_VOICES[language] = voice
     config.TTS_STYLE = style_choice
     config.TTS_STYLES = TTS_STYLE_PRESETS[style_choice]
@@ -503,7 +472,6 @@ def interactive_mode() -> None:
         console.print(f"\n[bold]{t('confirm_language')}[/bold]")
         language = _confirm_language(selected, style)
 
-        import voice_lab
         # 提前抽一次试听文本：用户重选音色/风格时复用同一段文本，
         # 既保证 A/B 对比公平，也让相同 (voice, style) 直接命中 TTS 缓存。
         preview_text = voice_lab.prepare_preview_text(selected[0], language)
@@ -529,7 +497,6 @@ def interactive_mode() -> None:
 
 
 def main() -> None:
-    from config import init_dirs
     init_dirs()
 
     parser = argparse.ArgumentParser(description="自动化有声书生成引擎")
@@ -571,7 +538,6 @@ def main() -> None:
     args = parser.parse_args()
 
     # 动态设置配置
-    import config
     config.CLEAN_MODE = args.clean_mode
     config.TTS_STYLE = args.style
     config.TTS_STYLES = TTS_STYLE_PRESETS[args.style]
