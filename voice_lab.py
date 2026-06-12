@@ -17,6 +17,7 @@ from rich.console import Console
 from rich.table import Table
 
 import config
+from config import STYLE_LABELS
 from assembler import _concat_wav_chunks, export_to_mp3
 from models import BookData
 from parser import parse_file
@@ -105,27 +106,6 @@ def _sample_preview_text(book: BookData, target_chars: int = 200) -> str:
     return text
 
 
-# 与 main.py 的 STYLE_LABELS 同步；voice_lab 独立声明避免循环依赖
-_STYLE_LABELS_ZH = {
-    "default": "默认（平静温暖）",
-    "news": "新闻播报（权威专业）",
-    "story": "故事叙述（富有感情）",
-    "biography": "传记叙述（客观平实）",
-    "nonfiction": "知识讲解（清晰逻辑）",
-}
-_STYLE_LABELS_EN = {
-    "default": "Default (calm & warm)",
-    "news": "News (authoritative)",
-    "story": "Story (emotional)",
-    "biography": "Biography (objective)",
-    "nonfiction": "Non-fiction (clear logic)",
-}
-
-
-def _style_labels(language: str) -> dict[str, str]:
-    return _STYLE_LABELS_EN if language == "en" else _STYLE_LABELS_ZH
-
-
 async def _select_combos(language: str) -> list[tuple[str, str]]:
     """让用户勾选 (voice, style) 组合。返回选定的列表。
 
@@ -136,7 +116,7 @@ async def _select_combos(language: str) -> list[tuple[str, str]]:
     若改回 .ask() 会触发嵌套 asyncio.run() RuntimeError。
     """
     voices = config.TTS_VOICE_OPTIONS.get(language, config.TTS_VOICE_OPTIONS["zh"])
-    styles = _style_labels(language)
+    styles = STYLE_LABELS[language]
 
     choices = []
     for v in voices:
@@ -218,7 +198,7 @@ async def _synthesize_previews(
     tmp_dir: Path,
 ) -> list[PreviewItem]:
     """合成所有组合（每个 synthesize_chapters 内部仍并发，外部用 lock 串行化避免 config 写争抢）。"""
-    labels = _style_labels(language)
+    labels = STYLE_LABELS[language]
     lock = asyncio.Lock()
     tasks = []
     for voice, style_key in combos:
