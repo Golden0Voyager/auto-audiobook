@@ -13,6 +13,7 @@ import config
 from assembler import assemble_book
 from cleaner import clean_chapters
 from models import ChapterAudio, CleanedChapter
+from mutagen.mp3 import MP3
 from parser import parse_file
 from rich.console import Console
 from rich.panel import Panel
@@ -180,7 +181,6 @@ async def process_book(file_path: Path, preview_chunks: int = 0) -> Path:
 
     # 增量模式下已有 MP3 不会被 assemble_book 重新统计，补充扫描
     if not mp3_paths and existing_chapters:
-        from mutagen.mp3 import MP3
         mp3_paths = sorted(output_dir.glob("*.mp3"))
         total_duration_ms = 0
         for p in mp3_paths:
@@ -257,7 +257,6 @@ def _get_existing_chapters(output_dir: Path) -> set[int]:
 
         # 校验 MP3 是否有效（非空、可解析）
         try:
-            from mutagen.mp3 import MP3
             audio = MP3(str(mp3_file))
             if audio.info.length <= 0:
                 continue

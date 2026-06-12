@@ -98,6 +98,10 @@ VOICE_PROFILES: dict[str, dict[str, dict[str, str]]] = {
     },
 }
 
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
 CATEGORY_LABELS: dict[str, str] = {
     "magazine": "杂志文章播报",
     "audiobook_biography": "有声书 - 传记",
@@ -122,10 +126,6 @@ def get_voice_description(category: str, lang: str, voice_name: str) -> str:
 
 def display_voice_profiles() -> None:
     """显示所有可用的音色配置。"""
-    from rich.console import Console
-    from rich.table import Table
-    from rich.panel import Panel
-
     console = Console()
 
     # 标准 TTS 模型预设音色
