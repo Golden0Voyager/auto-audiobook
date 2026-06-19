@@ -27,5 +27,14 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
-      - name: Run tests
-        run: uv run pytest -q
+      - name: Run ruff check
+        run: uv run ruff check auto_audiobook/ tests/
+
+      - name: Run mypy
+        run: uv run mypy auto_audiobook/ || true
+
+      - name: Run tests with coverage
+        run: uv run pytest -q --cov --cov-report=term-missing
+
+      - name: Enforce coverage threshold
+        run: uv run coverage report
