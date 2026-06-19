@@ -45,9 +45,24 @@ py-modules = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 
+[tool.coverage.run]
+source = ["."]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
+    "ruff>=0.5.0",
+    "mypy>=1.10.0",
 ]
+
+[tool.ruff]
+extend = "~/.config/ruff/ruff.toml"
+
+[tool.mypy]
+ignore_missing_imports = true
