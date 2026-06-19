@@ -43,8 +43,6 @@ def detect_language(text: str) -> tuple[str, float]:
     chinese_chars = len(_CHINESE_CHAR_RE.findall(sample))
     # 统计英文字符（字母）
     english_chars = len(_ENGLISH_CHAR_RE.findall(sample))
-    # 统计数字
-    digit_chars = len(_DIGIT_CHAR_RE.findall(sample))
 
     # 计算比例
     chinese_ratio = chinese_chars / total_chars if total_chars > 0 else 0

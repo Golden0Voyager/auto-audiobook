@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-from models import CleanedChapter, BookData, Chapter
+from models import CleanedChapter
 from pipeline import (
     _build_output_dirname,
     _get_cache_path,

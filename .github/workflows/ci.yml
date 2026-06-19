@@ -28,10 +28,10 @@ jobs:
         run: uv sync --dev
 
       - name: Run ruff check
-        run: uv run ruff check auto_audiobook/ tests/
+        run: uv run ruff check . tests/
 
       - name: Run mypy
-        run: uv run mypy auto_audiobook/ || true
+        run: uv run mypy . || true
 
       - name: Run tests with coverage
         run: uv run pytest -q --cov --cov-report=term-missing

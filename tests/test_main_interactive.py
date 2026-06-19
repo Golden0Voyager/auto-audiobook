@@ -6,7 +6,6 @@ from pathlib import Path
 
 from models import BookData, Chapter
 
-
 # ── mock 辅助 ──────────────────────────────────────────────
 
 
@@ -242,11 +241,11 @@ class TestInteractiveModeFullFlow:
 
         calls = _setup_process_mocks(monkeypatch, epub)
 
+        import contextlib
+
         from main import interactive_mode
-        try:
+        with contextlib.suppress(SystemExit):
             interactive_mode()
-        except SystemExit:
-            pass
 
         assert calls["voice_lab"] == 1
         assert calls["batch_process"] == 1
@@ -279,11 +278,11 @@ class TestInteractiveModeFullFlow:
 
         calls = _setup_process_mocks(monkeypatch, epub)
 
+        import contextlib
+
         from main import interactive_mode
-        try:
+        with contextlib.suppress(SystemExit):
             interactive_mode()
-        except SystemExit:
-            pass
 
         assert calls["voice_lab"] == 1
         assert calls["batch_process"] == 1

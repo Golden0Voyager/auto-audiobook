@@ -7,12 +7,10 @@ import base64
 import hashlib
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 
 from openai import AsyncOpenAI
 from rich.console import Console
-from rich.panel import Panel
-from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn
+from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn
 
 import config
 from config import (

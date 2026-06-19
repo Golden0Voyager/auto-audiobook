@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 
 from openai import AsyncOpenAI
-from voice_profiles import VOICE_PROFILES, CATEGORY_LABELS
+
+from voice_profiles import CATEGORY_LABELS, VOICE_PROFILES
 
 # API 配置 — 优先从环境变量读取，避免硬编码凭据
 API_KEY: str = os.environ.get("XIAOMI_MIMO_API_KEY", "")

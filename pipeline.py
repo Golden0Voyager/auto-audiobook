@@ -9,18 +9,18 @@ import shutil
 import time
 from pathlib import Path
 
-import config
-from assembler import assemble_book
-from cleaner import clean_chapters
-from models import ChapterAudio, CleanedChapter
 from mutagen.mp3 import MP3
-from parser import parse_file
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+
+import config
+from assembler import assemble_book
+from cleaner import clean_chapters
+from models import CleanedChapter
+from parser import parse_file
 from rule_cleaner import clean_chapters as rule_clean_chapters
 from synthesizer import SynthesisStats, synthesize_chapters
-from text_processor import detect_language
 
 logger = logging.getLogger(__name__)
 console = Console()

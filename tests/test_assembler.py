@@ -5,8 +5,6 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
-import mutagen.id3
-from mutagen.id3 import TIT2, TPE1, TALB, TRCK
 from pydub import AudioSegment
 
 from assembler import (
@@ -17,7 +15,6 @@ from assembler import (
     write_id3_tags,
 )
 from models import ChapterAudio
-
 
 # ── WAV 辅助 ──────────────────────────────────────────────
 

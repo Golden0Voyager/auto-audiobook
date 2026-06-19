@@ -27,7 +27,6 @@ async def synthesize_with_concurrency(
 ) -> float:
     """返回总耗时（秒）。"""
     semaphore = asyncio.Semaphore(concurrency)
-    total_chunks = sum(len(c.chunks) for c in chapters)
 
     async def _process(chunk: str) -> bytes:
         async with semaphore:

@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import re
 import subprocess
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import ebooklib
@@ -71,7 +70,7 @@ def parse_pdf(file_path: Path) -> BookData:
     current_text = ""
 
     with pdfplumber.open(str(file_path)) as pdf:
-        for page_num, page in enumerate(pdf.pages, 1):
+        for _page_num, page in enumerate(pdf.pages, 1):
             text = page.extract_text()
             if not text:
                 continue
@@ -285,10 +284,7 @@ _MIN_TEXT_LENGTH = 100
 def _is_toc_page(text: str) -> bool:
     """检测是否为纯目录页面（封面、空白页等）。"""
     # 太短的文本可能是封面/空白页
-    if len(text.strip()) < _MIN_TEXT_LENGTH:
-        return True
-
-    return False
+    return len(text.strip()) < _MIN_TEXT_LENGTH
 
 
 def _clean_metadata_lines(text: str) -> str:

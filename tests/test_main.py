@@ -6,7 +6,6 @@ import logging
 
 from config import OUTPUT_DIR, TTS_STYLE_PRESETS
 
-
 # ── 1. 翻译函数 ──────────────────────────────────────────────────────
 
 
@@ -25,7 +24,7 @@ class TestTranslation:
         assert "5" in result
 
     def test_english_translation_exists(self):
-        from main import UI_LANG, TRANSLATIONS
+        from main import TRANSLATIONS
         # 验证中英文都有关键翻译
         for lang in ("zh", "en"):
             assert "app_title" in TRANSLATIONS[lang]
@@ -98,8 +97,8 @@ class TestAuxFunctions:
         assert style is not None
 
     def test_apply_processing_config(self):
-        from main import _apply_processing_config
         import config as _cfg
+        from main import _apply_processing_config
         # 保存原始值
         orig_voices = dict(_cfg.TTS_VOICES)
         orig_style = _cfg.TTS_STYLE
@@ -108,7 +107,7 @@ class TestAuxFunctions:
             _apply_processing_config("zh", "news", "白桦")
             assert _cfg.TTS_VOICES["zh"] == "白桦"
             assert _cfg.TTS_STYLE == "news"
-            assert _cfg.TTS_STYLES == TTS_STYLE_PRESETS["news"]
+            assert TTS_STYLE_PRESETS["news"] == _cfg.TTS_STYLES
         finally:
             _cfg.TTS_VOICES.update(orig_voices)
             _cfg.TTS_STYLE = orig_style
@@ -213,11 +212,11 @@ class TestMainEntryPoint:
 
         monkeypatch.setattr("main.sys.exit", fake_exit)
 
+        import contextlib
+
         from main import main
-        try:
+        with contextlib.suppress(SystemExit):
             main()
-        except SystemExit:
-            pass
         assert exit_code[0] == 1
 
     def test_file_single_process(self, monkeypatch):
@@ -247,8 +246,8 @@ class TestMainEntryPoint:
 
         monkeypatch.setattr("main.display_voice_profiles", fake_display)
 
-        from main import main
         import config
+        from main import main
         orig_style = config.TTS_STYLE
         try:
             main()

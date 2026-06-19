@@ -17,8 +17,8 @@ from rich.console import Console
 from rich.table import Table
 
 import config
-from config import STYLE_LABELS
 from assembler import _concat_wav_chunks, export_to_mp3
+from config import STYLE_LABELS
 from models import BookData
 from parser import parse_file
 from rule_cleaner import clean_chapters as rule_clean

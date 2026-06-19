@@ -6,7 +6,7 @@ import io
 import re
 from pathlib import Path
 
-from mutagen.id3 import ID3, TALB, TIT2, TPE1, TRCK
+from mutagen.id3 import TALB, TIT2, TPE1, TRCK
 from mutagen.mp3 import MP3
 from pydub import AudioSegment
 

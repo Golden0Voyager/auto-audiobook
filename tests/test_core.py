@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import io
-from pathlib import Path
 
-import pytest
 from pydub import AudioSegment
 
 from assembler import _concat_wav_chunks, _sanitize_filename
-from models import BookData, Chapter, CleanedChapter
+from models import BookData, CleanedChapter
 from parser import chunk_text
 from rule_cleaner import _clean_chunk
 from synthesizer import _compute_cache_key

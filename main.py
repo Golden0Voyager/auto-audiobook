@@ -21,13 +21,12 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 import config
+import voice_lab
 from config import CLEAN_MODE, INPUT_DIR, OUTPUT_DIR, STYLE_LABELS, TTS_CACHE_DIR, TTS_STYLE_PRESETS, init_dirs
 from parser import parse_file
 from pipeline import process_book
 from text_processor import detect_language, get_language_name
 from voice_profiles import display_voice_profiles
-
-import voice_lab
 
 console = Console()
 

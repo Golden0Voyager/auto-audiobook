@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ebooklib import epub
 
-from models import BookData, Chapter
+from models import BookData
 from parser import (
     _extract_toc_titles,
     _get_metadata,
@@ -221,7 +221,7 @@ class TestParseEpub:
 
         class FakeTOCItem:
             def get_content(self):
-                return "<html><body>目录</body></html>".encode("utf-8")
+                return "<html><body>目录</body></html>".encode()
 
             def get_name(self):
                 return "toc.xhtml"
@@ -539,7 +539,7 @@ class TestParseFile:
         monkeypatch.setattr("parser.convert_mobi_to_epub", fake_convert)
         monkeypatch.setattr("parser.parse_epub", fake_parse_epub)
 
-        result = parse_file(Path("book.azw3"))
+        parse_file(Path("book.azw3"))
         assert calls[0] == ("convert", ".azw3")
 
     def test_routes_kf8(self, monkeypatch):

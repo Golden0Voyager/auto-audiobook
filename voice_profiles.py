@@ -1,5 +1,9 @@
 """音色库 — 按场景和语言组织的 VoiceDesign 音色描述。"""
 
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
 VOICE_PROFILES: dict[str, dict[str, dict[str, str]]] = {
     # === 杂志文章播报 ===
     "magazine": {
@@ -97,10 +101,6 @@ VOICE_PROFILES: dict[str, dict[str, dict[str, str]]] = {
         },
     },
 }
-
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
 
 CATEGORY_LABELS: dict[str, str] = {
     "magazine": "杂志文章播报",

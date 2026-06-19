@@ -1,14 +1,17 @@
 """集成测试 — 验证 VoiceDesign 集成。"""
 
-import asyncio
 import sys
-from pathlib import Path
 
 # 测试模块导入
 print("1. 测试模块导入...")
 try:
-    from voice_profiles import VOICE_PROFILES, CATEGORY_LABELS, get_voice_description, get_voice_names, display_voice_profiles
     from text_processor import detect_language, optimize_for_speech
+    from voice_profiles import (
+        CATEGORY_LABELS,
+        VOICE_PROFILES,
+        get_voice_description,
+        get_voice_names,
+    )
     print("   ✅ 所有模块导入成功")
 except Exception as e:
     print(f"   ❌ 模块导入失败: {e}")

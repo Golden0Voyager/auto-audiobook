@@ -1,10 +1,8 @@
 """voice_lab 单元/集成测试。"""
 import random
 
-import pytest
-
-from models import BookData, Chapter
 import voice_lab as vl_module
+from models import BookData, Chapter
 from voice_lab import _sample_preview_text, _truncate_at_sentence
 
 

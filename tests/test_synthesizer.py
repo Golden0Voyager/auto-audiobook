@@ -5,11 +5,9 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
-from pathlib import Path
 
 from models import CleanedChapter
 from synthesizer import (
-    SynthesisStats,
     _compute_cache_key,
     _synthesize_single,
     synthesize_chapters,
