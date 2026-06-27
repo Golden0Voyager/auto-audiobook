@@ -55,3 +55,9 @@ CLAUDE.md
 # Skill-generated analysis artifacts
 .understand-anything/
 .codegraph/
+
+# Toolchain caches
+.ruff_cache/
+
+# Coverage
+htmlcov/
